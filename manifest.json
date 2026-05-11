@@ -2,7 +2,8 @@
   "name": "株トレードシミュレーター",
   "short_name": "株シミュ",
   "description": "リアルタイム株価連動・信用取引対応のトレードシミュレーター",
-  "start_url": "./株トレードシミュレーター_信用取引版分割.html",
+  "start_url": "/stock-trade-simulator-Smartphone-app-version/株トレードシミュレーター_信用取引版分割.html",
+  "scope": "/stock-trade-simulator-Smartphone-app-version/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f4f4f7",
@@ -26,7 +27,7 @@
   "shortcuts": [
     {
       "name": "シミュレーターを開く",
-      "url": "./株トレードシミュレーター_信用取引版分割.html",
+      "url": "/stock-trade-simulator-Smartphone-app-version/株トレードシミュレーター_信用取引版分割.html",
       "description": "株トレードシミュレーターを起動"
     }
   ]
