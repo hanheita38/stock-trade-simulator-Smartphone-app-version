@@ -9,7 +9,7 @@ const CACHE_NAME = 'kabu-sim-v1';
 // キャッシュ対象の静的ファイル
 const STATIC_ASSETS = [
   './',
-  './株トレードシミュレーター_信用取引版分割.html',
+  './index.html',
   './style.css',
   './state-manager.js',
   './api-client.js',
@@ -93,7 +93,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // オフライン時にHTMLを返すフォールバック
         if (event.request.mode === 'navigate') {
-          return caches.match('./株トレードシミュレーター_信用取引版分割.html');
+          return caches.match('./index.html');
         }
       });
     })

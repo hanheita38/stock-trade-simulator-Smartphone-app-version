@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>株トレードシミュレーター</title>
+
+<!-- PWA: Web App Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- PWA: iOS Safari 対応 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="株シミュ">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<!-- PWA: Android Chrome / Theme Color -->
+<meta name="theme-color" content="#1e293b">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- SEO / OGP -->
+<meta name="description" content="リアルタイム株価連動・信用取引対応のトレードシミュレーター">
+
+<link rel="stylesheet" href="style.css">
+
+<!-- Service Worker 登録 -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('[PWA] SW registered:', reg.scope))
+        .catch(err => console.warn('[PWA] SW registration failed:', err));
+    });
+  }
+</script>
+</head>
+<body>
+
+<div id="app">
+  <div class="header">
+    <div style="font-weight:bold" id="app-title">株トレードシミュレーター <small>(市場連動版)</small></div>
+    <div class="header-right">
+      <button onclick="toggleLang()" class="btn-lang" id="lang-btn">EN</button>
+      <button onclick="resetGame()" class="btn-reset" id="btn-reset-label">リセット</button>
+      <div class="cash-badge"><span id="label-cash">現金</span>: <span id="cash-display">¥0</span></div>
+    </div>
+  </div>
+
+  <div class="search-box">
+      <div class="api-key-panel">
+        <div class="api-key-top">
+          <div class="api-key-title" id="api-key-title">Finnhub APIキー</div>
+          <div class="api-key-actions">
+            <div class="api-key-status" id="api-key-status">未保存</div>
+            <button type="button" class="api-key-manage" id="api-key-manage" onclick="expandApiKeyPanel()">設定</button>
+          </div>
+        </div>
+        <div class="api-key-body" id="api-key-body">
+          <div class="api-key-explain" id="api-key-explain"></div>
+          <div class="api-key-form">
+            <input type="password" id="api-key-input" autocomplete="off" placeholder="Finnhub APIキーを入力">
+            <button type="button" class="btn-api-save" id="api-key-save" onclick="saveFinnhubApiKey()">保存</button>
+            <button type="button" class="btn-api-delete" id="api-key-delete" onclick="deleteFinnhubApiKey()">削除</button>
+          </div>
+          <div class="api-key-help" id="api-key-help"></div>
+          <div class="api-key-note" id="api-key-note">APIキーはブラウザの LocalStorage にのみ保存され、開発者のサーバーには一切送信されません。</div>
+        </div>
+    </div>
+    <div class="search-input-group">
+      <input type="text" id="stock-search" placeholder="NVDA, AMD, AAPL...">
+      <button onclick="searchAndAddStock()" class="btn-search" id="btn-add">追加</button>
+    </div>
+    <ul id="searchResultList"></ul>
+  </div>
+
+  <div class="stock-tabs" id="tabs"></div>
+
+  <div id="price-area">
+    <div class="sync-status" id="sync-time"><span id="sync-text">市場ステータス取得中...</span></div>
+    <div class="sync-status" style="color:#aaa">
+      USD/JPY: <span id="fx-rate-display">¥---/USD</span>
+      <span style="font-size:9px;margin-left:4px">(5分更新)</span>
+    </div>
+    <div class="price-display">
+      <span id="price-jpy">¥0</span>
+      <span id="price-usd" class="sub-price">$0.00</span>
+    </div>
+    
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+  <a id="tipranks-link" href="#" target="_blank" rel="noopener noreferrer" class="external-link-btn" style="display: none;">
+    <span>TipRanksで分析を見る</span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 5px;">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+      <polyline points="15 3 21 3 21 9"></polyline>
+      <line x1="10" y1="14" x2="21" y2="3"></line>
+    </svg>
+  </a>
+  <a id="macrotrends-link" href="#" target="_blank" rel="noopener noreferrer" class="external-link-btn macrotrends-btn" style="display: none;">
+    <span id="macrotrends-label">Macrotrendsで長期財務を見る</span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 5px;">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+      <polyline points="15 3 21 3 21 9"></polyline>
+      <line x1="10" y1="14" x2="21" y2="3"></line>
+    </svg>
+  </a>
+</div>
+
+    <div class="price-change" id="change-display">--</div>
+  </div>
+
+  <div class="chart-wrap"><canvas id="chart"></canvas></div>
+
+  <div class="position-info">
+    <div>
+      <span class="info-label" id="label-qty">保有数</span>
+      <span class="info-value" id="current-qty">0株</span>
+    </div>
+    <div>
+      <span class="info-label" id="label-avg">取得単価</span>
+      <span class="info-value" id="current-avg-jpy">¥0</span>
+      <span class="usd-val" id="current-avg-usd">$0.00</span>
+    </div>
+    <div>
+      <span class="info-label" id="label-pnl">現在の損益</span>
+      <span class="info-value" id="current-pnl-jpy">¥0</span>
+      <span class="usd-val" id="current-pnl-usd">$0.00</span>
+    </div>
+  </div>
+
+  <!-- 注文タイプ切り替えタブ -->
+  <div class="order-type-tabs">
+    <button class="order-type-tab active" id="tab-market" onclick="switchOrderTab('market')">成行</button>
+    <button class="order-type-tab" id="tab-limit"  onclick="switchOrderTab('limit')">指値</button>
+    <button class="order-type-tab" id="tab-stop"   onclick="switchOrderTab('stop')">逆指値</button>
+    <button class="order-type-tab" id="tab-oco"    onclick="switchOrderTab('oco')">OCO</button>
+  </div>
+
+  <!-- 成行・指値・逆指値 共通パネル -->
+  <div class="trade-panel" id="panel-market-limit-stop">
+    <div class="trade-card">
+      <label style="font-size:11px" id="label-buy-qty">買い数量</label>
+      <input type="number" id="buy-qty" value="10">
+      <div class="limit-price-row" id="buy-price-row" style="display:none">
+        <label id="label-buy-price">価格 (¥)</label>
+        <input type="number" id="buy-limit-price" placeholder="0">
+      </div>
+      <button class="btn-buy" onclick="trade('buy')" id="btn-buy-label">買い注文</button>
+    </div>
+    <div class="trade-card">
+      <label style="font-size:11px" id="label-sell-qty">売り数量</label>
+      <input type="number" id="sell-qty" value="10">
+      <div class="limit-price-row" id="sell-price-row" style="display:none">
+        <label id="label-sell-price">価格 (¥)</label>
+        <input type="number" id="sell-limit-price" placeholder="0">
+      </div>
+      <button class="btn-sell" onclick="trade('sell')" id="btn-sell-label">売り注文</button>
+    </div>
+  </div>
+
+  <!-- OCO注文パネル -->
+  <div class="oco-panel" id="panel-oco" style="display:none">
+    <h4>🔀 <span id="oco-panel-title">OCO注文（利確・損切り同時設定）</span></h4>
+    <div class="oco-fields">
+      <div class="oco-field">
+        <label id="label-oco-qty">数量</label>
+        <input type="number" id="oco-qty" value="10">
+      </div>
+      <div class="oco-field">
+        <label id="label-oco-side">売買方向</label>
+        <select id="oco-side" style="width:100%;padding:7px;border-radius:4px;border:1px solid #ddd;font-size:13px">
+          <option value="sell" id="oco-side-sell">売（保有株の決済）</option>
+          <option value="buy"  id="oco-side-buy">買（新規購入）</option>
+        </select>
+      </div>
+      <div class="oco-field">
+        <label id="label-oco-profit">🟢 利確価格（指値）</label>
+        <input type="number" id="oco-profit-price" placeholder="高い価格 (¥)">
+      </div>
+      <div class="oco-field">
+        <label id="label-oco-stop">🔴 損切り価格（逆指値）</label>
+        <input type="number" id="oco-stop-price" placeholder="低い価格 (¥)">
+      </div>
+    </div>
+    <button class="btn-oco" onclick="placeOcoOrder()" id="btn-oco-label">OCO注文を出す</button>
+  </div>
+
+  <!-- 待機注文リスト -->
+  <div class="pending-orders" id="pending-orders-panel" style="display:none">
+    <h4>📋 <span id="label-pending-orders">待機中の注文</span></h4>
+    <div id="pending-orders-list"></div>
+  </div>
+
+  <div id="order-triggered-toast" class="order-triggered-toast"></div>
+
+  <!-- ポジションサイジング計算機 -->
+  <div class="psz-panel">
+    <div class="psz-header" onclick="togglePszPanel()">
+      <div class="psz-header-left">
+        <span class="psz-title">🎯 ポジションサイジング計算機</span>
+        <span class="psz-badge">PRO</span>
+      </div>
+      <span class="psz-chevron" id="psz-chevron">▼</span>
+    </div>
+    <div class="psz-body" id="psz-body">
+
+      <!-- メソッド選択 -->
+      <div class="psz-method-tabs">
+        <button class="psz-method-tab active" id="psztab-fixed" onclick="switchPszMethod('fixed')">固定比率<br><span style="font-weight:normal;font-size:10px">Fixed Fraction</span></button>
+        <button class="psz-method-tab" id="psztab-kelly" onclick="switchPszMethod('kelly')">ケリー基準<br><span style="font-weight:normal;font-size:10px">Kelly Criterion</span></button>
+        <button class="psz-method-tab" id="psztab-atr" onclick="switchPszMethod('atr')">ATRベース<br><span style="font-weight:normal;font-size:10px">Volatility-sized</span></button>
+        <button class="psz-method-tab" id="psztab-rr" onclick="switchPszMethod('rr')">RR比<br><span style="font-weight:normal;font-size:10px">Risk/Reward</span></button>
+      </div>
+
+      <!-- メソッド説明 -->
+      <div class="psz-method-desc" id="psz-method-desc"></div>
+
+      <!-- 固定比率 入力 -->
+      <div id="psz-form-fixed">
+        <div class="psz-inputs">
+          <div class="psz-input-group full">
+            <span class="psz-label">口座リスク率 <span class="psz-hint">（1トレードで失ってよい総資産の割合）</span></span>
+            <div class="psz-slider-wrap">
+              <input type="range" class="psz-slider" id="psz-risk-pct" min="0.1" max="5" step="0.1" value="1" oninput="onPszSlider(this,'psz-risk-pct-val');calcPsz()">
+              <span class="psz-slider-val" id="psz-risk-pct-val">1.0%</span>
+            </div>
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">エントリー価格 <span class="psz-hint">（現在値自動入力）</span></span>
+            <input type="number" class="psz-input" id="psz-entry" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">損切り価格 <span class="psz-hint">（必須）</span></span>
+            <input type="number" class="psz-input" id="psz-stop" placeholder="¥0" oninput="calcPsz()">
+          </div>
+        </div>
+      </div>
+
+      <!-- ケリー基準 入力 -->
+      <div id="psz-form-kelly" style="display:none">
+        <div class="psz-kelly-detail" id="psz-kelly-detail"></div>
+        <div class="psz-inputs">
+          <div class="psz-input-group">
+            <span class="psz-label">過去の勝率 <span class="psz-hint">（直近の取引から）</span></span>
+            <input type="number" class="psz-input" id="psz-wr" placeholder="例: 55" min="1" max="99" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">平均RR比 <span class="psz-hint">（利益÷損失）</span></span>
+            <input type="number" class="psz-input" id="psz-rr-kelly" placeholder="例: 2.0" step="0.1" min="0.1" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">エントリー価格</span>
+            <input type="number" class="psz-input" id="psz-entry-kelly" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">損切り価格</span>
+            <input type="number" class="psz-input" id="psz-stop-kelly" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group full">
+            <span class="psz-label">ケリー分率 <span class="psz-hint">（安全係数：フルケリーの何割を使うか）</span></span>
+            <div class="psz-slider-wrap">
+              <input type="range" class="psz-slider" id="psz-kelly-frac" min="10" max="100" step="5" value="50" oninput="onPszSlider(this,'psz-kelly-frac-val');calcPsz()">
+              <span class="psz-slider-val" id="psz-kelly-frac-val">50%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATRベース 入力 -->
+      <div id="psz-form-atr" style="display:none">
+        <div class="psz-inputs">
+          <div class="psz-input-group full">
+            <span class="psz-label">口座リスク率</span>
+            <div class="psz-slider-wrap">
+              <input type="range" class="psz-slider" id="psz-risk-pct-atr" min="0.1" max="5" step="0.1" value="1" oninput="onPszSlider(this,'psz-risk-pct-atr-val');calcPsz()">
+              <span class="psz-slider-val" id="psz-risk-pct-atr-val">1.0%</span>
+            </div>
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">エントリー価格</span>
+            <input type="number" class="psz-input" id="psz-entry-atr" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">ATR <span class="psz-hint">（価格データから自動計算）</span></span>
+            <input type="number" class="psz-input" id="psz-atr-val" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">ATR乗数 <span class="psz-hint">（損切り幅 = ATR × N）</span></span>
+            <input type="number" class="psz-input" id="psz-atr-mult" value="2" step="0.5" min="0.5" max="5" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">計算されたATRストップ</span>
+            <input type="number" class="psz-input" id="psz-atr-stop-display" placeholder="--" readonly style="background:#f1f5f9;color:#64748b">
+          </div>
+        </div>
+      </div>
+
+      <!-- RR比 入力 -->
+      <div id="psz-form-rr" style="display:none">
+        <div class="psz-inputs">
+          <div class="psz-input-group full">
+            <span class="psz-label">口座リスク率</span>
+            <div class="psz-slider-wrap">
+              <input type="range" class="psz-slider" id="psz-risk-pct-rr" min="0.1" max="5" step="0.1" value="1" oninput="onPszSlider(this,'psz-risk-pct-rr-val');calcPsz()">
+              <span class="psz-slider-val" id="psz-risk-pct-rr-val">1.0%</span>
+            </div>
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">エントリー価格</span>
+            <input type="number" class="psz-input" id="psz-entry-rr" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">損切り価格 🔴</span>
+            <input type="number" class="psz-input" id="psz-stop-rr" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">目標価格 🟢</span>
+            <input type="number" class="psz-input" id="psz-target-rr" placeholder="¥0" oninput="calcPsz()">
+          </div>
+          <div class="psz-input-group">
+            <span class="psz-label">最低RR比 <span class="psz-hint">（この比率未満は非推奨）</span></span>
+            <input type="number" class="psz-input" id="psz-min-rr" value="2" step="0.5" min="0.5" oninput="calcPsz()">
+          </div>
+        </div>
+      </div>
+
+      <!-- 結果表示 -->
+      <div class="psz-result" id="psz-result">
+        <div class="psz-result-main">
+          <div class="psz-result-shares">
+            <span class="psz-result-label" id="psz-result-label">推奨株数</span>
+            <span class="psz-result-value" id="psz-result-shares">--</span>
+            <span class="psz-result-unit" id="psz-result-unit">株</span>
+          </div>
+        </div>
+        <div class="psz-result-stats">
+          <div class="psz-stat-cell">
+            <span class="psz-stat-cell-label" id="psz-stat-label-risk">最大損失額</span>
+            <span class="psz-stat-cell-value" id="psz-stat-risk">--</span>
+          </div>
+          <div class="psz-stat-cell">
+            <span class="psz-stat-cell-label" id="psz-stat-label-exposure">必要投資額</span>
+            <span class="psz-stat-cell-value" id="psz-stat-exposure">--</span>
+          </div>
+          <div class="psz-stat-cell">
+            <span class="psz-stat-cell-label" id="psz-stat-label-cashpct">投資額/総資産</span>
+            <span class="psz-stat-cell-value" id="psz-stat-cashpct">--</span>
+          </div>
+          <div class="psz-stat-cell">
+            <span class="psz-stat-cell-label" id="psz-stat-label-reward">期待利益額</span>
+            <span class="psz-stat-cell-value" id="psz-stat-reward">--</span>
+          </div>
+        </div>
+
+        <!-- ═══ RR比ビジュアルパネル ═══ -->
+        <div class="rr-visual-panel">
+          <div class="rr-visual-title">
+            📐 <span id="rr-panel-title">リスクリワード比（自動計算）</span>
+          </div>
+
+          <!-- RRスコアバッジ＋バーチャート -->
+          <div class="rr-score-row">
+            <div class="rr-score-badge none" id="rr-score-badge">
+              <span class="rr-score-number" id="rr-score-number">--</span>
+              <span class="rr-score-label">RR比</span>
+              <span class="rr-score-verdict" id="rr-score-verdict" style="display:none"></span>
+            </div>
+            <div class="rr-bar-section">
+              <div class="rr-bar-row">
+                <span class="rr-bar-label" id="rr-label-risk">リスク</span>
+                <div class="rr-bar-track">
+                  <div class="rr-bar-fill risk" id="rr-bar-risk" style="width:0%"></div>
+                </div>
+                <span class="rr-bar-amount" id="rr-bar-risk-amt">--</span>
+              </div>
+              <div class="rr-bar-row">
+                <span class="rr-bar-label" id="rr-label-reward">リワード</span>
+                <div class="rr-bar-track">
+                  <div class="rr-bar-fill reward" id="rr-bar-reward" style="width:0%"></div>
+                </div>
+                <span class="rr-bar-amount" id="rr-bar-reward-amt">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 価格レンジビジュアル（ストップ〜エントリー〜目標） -->
+          <div class="rr-breakeven-bar" id="rr-price-range-section" style="display:none">
+            <div class="rr-breakeven-label">
+              <span id="rr-price-stop-label">損切り</span>
+              <span id="rr-price-entry-label">▼ エントリー</span>
+              <span id="rr-price-target-label">目標</span>
+            </div>
+            <div class="rr-price-track" id="rr-price-track">
+              <div class="rr-price-fill-stop"   id="rr-price-fill-stop"></div>
+              <div class="rr-price-fill-target" id="rr-price-fill-target"></div>
+              <div class="rr-price-marker-entry" id="rr-price-marker-entry"></div>
+            </div>
+            <div class="rr-price-labels">
+              <span id="rr-price-stop-val">--</span>
+              <span id="rr-price-entry-val">--</span>
+              <span id="rr-price-target-val">--</span>
+            </div>
+          </div>
+
+          <!-- 損益分岐勝率・期待値 -->
+          <div class="rr-stats-row">
+            <div class="rr-mini-stat">
+              <span class="rr-mini-label" id="rr-label-breakeven">損益分岐勝率</span>
+              <span class="rr-mini-value" id="rr-breakeven-val">--</span>
+            </div>
+            <div class="rr-mini-stat">
+              <span class="rr-mini-label" id="rr-label-ev">1トレード期待値</span>
+              <span class="rr-mini-value" id="rr-ev-val">--</span>
+            </div>
+            <div class="rr-mini-stat">
+              <span class="rr-mini-label" id="rr-label-history-rr">実績平均RR</span>
+              <span class="rr-mini-value" id="rr-history-rr-val">--</span>
+            </div>
+          </div>
+
+          <!-- 過去トレードのRR分布バー -->
+          <div class="rr-history-section" id="rr-history-section" style="display:none">
+            <div class="rr-history-title" id="rr-history-title">直近トレードのP/L比（左が古い）</div>
+            <div class="rr-history-bars" id="rr-history-bars"></div>
+            <div class="rr-history-summary">
+              <span id="rr-history-worst"></span>
+              <span id="rr-history-avg"></span>
+              <span id="rr-history-best"></span>
+            </div>
+          </div>
+        </div>
+        <!-- ═══ RR比ビジュアルパネル end ═══ -->
+      </div>
+
+      <div class="psz-warning" id="psz-warning"></div>
+
+      <button class="btn-psz-apply" id="btn-psz-apply" onclick="applyPszToOrder()" disabled>
+        ↑ この株数を注文欄に反映する
+      </button>
+    </div>
+  </div>
+
+  <div class="portfolio">
+    <div id="holdings-list"></div>
+    <div style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px; font-weight:bold" id="total-assets"><span id="label-total">総資産</span>: ¥0</div>
+    <div class="risk-metrics">
+      <div class="metric-box">
+        <span class="metric-label" id="label-sharpe">シャープレシオ</span>
+        <span class="metric-value" id="sharpe-ratio">--</span>
+        <div class="metric-help" id="desc-sharpe">リスクを取った分、どれだけ効率よく利益を出せているか。</div>
+      </div>
+      <div class="metric-box">
+        <span class="metric-label" id="label-drawdown">最大ドローダウン</span>
+        <span class="metric-value" id="max-drawdown">--</span>
+        <div class="metric-help" id="desc-drawdown">資産が最大で何％減ったか。</div>
+      </div>
+      <!-- バフェット流 -->
+      <div class="metric-box" id="buffett-theory-box">
+        <span class="metric-label" id="label-buffett-theory">📐 理論値（グレアム数）</span>
+        <span class="metric-value" id="buffett-theory-val">--</span>
+        <div class="metric-help" id="desc-buffett-theory">√(22.5 × EPS × BPS) で算出。バフェット流の本質的価値。</div>
+      </div>
+      <div class="metric-box" id="buffett-margin-box">
+        <span class="metric-label" id="label-buffett-margin">🛡️ 安全域（バフェット）</span>
+        <span class="metric-value" id="buffett-margin-val">--</span>
+        <div class="metric-help" id="desc-buffett-margin">理論値より現在値が低いほど「割安」。+がお得、−が割高。</div>
+      </div>
+      <!-- PEGレシオ -->
+      <div class="metric-box" id="peg-ratio-box">
+        <span class="metric-label" id="label-peg-ratio">📈 PEGレシオ</span>
+        <span class="metric-value" id="peg-ratio-val">--</span>
+        <div class="metric-help" id="desc-peg-ratio">PER ÷ EPS成長率。1以下が割安の目安。</div>
+      </div>
+    </div>
+    <!-- ダリオ流 暴落テスト トグル -->
+    <div class="crash-toggle-area">
+      <label>
+        <input type="checkbox" id="crash-toggle" onchange="updateUI()">
+        <span id="label-crash-toggle">🌪️ 暴落テスト ON（レイ・ダリオ流）</span>
+        <span class="crash-badge" id="crash-badge-pct">−25%</span>
+      </label>
+    </div>
+    <div class="crash-result" id="crash-result-box">
+      <div class="crash-result-label" id="crash-result-label">⚠️ もし今 −25% の暴落が起きたら...</div>
+      <div class="crash-result-value" id="crash-result-value">--</div>
+      <div class="crash-result-sub" id="crash-result-sub"></div>
+    </div>
+  </div>
+
+  <!-- 決算カレンダー＋EPSサプライズ パネル -->
+  <div class="earnings-calendar-panel">
+    <div class="earnings-panel-header" onclick="toggleEarningsPanel()">
+      <span class="earnings-panel-title">📆 <span id="label-earnings-panel">決算カレンダー＋EPSサプライズ</span></span>
+      <span class="earnings-panel-chevron" id="earnings-panel-chevron">▼</span>
+    </div>
+    <div id="earnings-panel-body">
+      <div id="earnings-panel">
+        <div class="earnings-next-loading">取得中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 信用取引パネル -->
+  <div class="margin-panel">
+    <div class="margin-panel-header" onclick="toggleMarginPanel()">
+      <span class="margin-panel-title">⚡ <span id="label-margin-panel">信用取引（空売り・レバレッジ）</span><span class="margin-badge" id="margin-badge-label">信用</span></span>
+      <span class="margin-panel-chevron" id="margin-panel-chevron">▼</span>
+    </div>
+    <div id="margin-panel-body">
+      <!-- 証拠金サマリー -->
+      <div class="margin-summary">
+        <div class="margin-stat">
+          <span class="margin-stat-label" id="label-margin-deposit">預け証拠金</span>
+          <span class="margin-stat-value" id="margin-deposit-val">¥0</span>
+        </div>
+        <div class="margin-stat">
+          <span class="margin-stat-label" id="label-margin-used">使用中証拠金</span>
+          <span class="margin-stat-value" id="margin-used-val">¥0</span>
+        </div>
+        <div class="margin-stat">
+          <span class="margin-stat-label" id="label-margin-ratio">維持率</span>
+          <span class="margin-stat-value safe" id="margin-ratio-val">--</span>
+        </div>
+      </div>
+
+      <!-- 維持率バー -->
+      <div class="maintenance-bar-wrap" id="maintenance-bar-wrap" style="display:none">
+        <div class="maintenance-bar-label">
+          <span id="label-maintenance-bar">証拠金維持率</span>
+          <span id="maintenance-bar-pct">--%</span>
+        </div>
+        <div class="maintenance-bar-bg">
+          <div class="maintenance-bar-fill safe" id="maintenance-bar-fill" style="width:0%"></div>
+        </div>
+        <div class="maintenance-note" id="maintenance-note">維持率 130%未満で追証警告 / 100%未満でロスカット</div>
+      </div>
+
+      <!-- タブ -->
+      <div class="margin-trade-tabs" style="margin-top:14px">
+        <button class="margin-trade-tab active-short" id="mtab-short" onclick="switchMarginTab('short')">📉 空売り新規</button>
+        <button class="margin-trade-tab" id="mtab-cover" onclick="switchMarginTab('cover')">🔄 空売り返済</button>
+        <button class="margin-trade-tab" id="mtab-llong" onclick="switchMarginTab('llong')">📈 信用買い</button>
+        <button class="margin-trade-tab" id="mtab-lclose" onclick="switchMarginTab('lclose')">💰 信用買い返済</button>
+      </div>
+
+      <!-- 空売り新規フォーム -->
+      <div class="margin-form" id="mform-short">
+        <div class="margin-form-row">
+          <div>
+            <label id="label-short-qty">空売り数量</label>
+            <input type="number" id="short-qty" value="10" min="1">
+          </div>
+          <div>
+            <label id="label-short-leverage">レバレッジ</label>
+            <select id="short-leverage">
+              <option value="1">1倍（等倍）</option>
+              <option value="2" selected>2倍</option>
+              <option value="3">3倍</option>
+            </select>
+          </div>
+        </div>
+        <div class="leverage-display">
+          <span id="label-short-required">必要証拠金</span>
+          <strong id="short-required-val">--</strong>
+        </div>
+        <button class="btn-short" onclick="tradeMargin('short')" id="btn-short-label">空売り注文（新規）</button>
+        <div style="margin-top:8px;font-size:10px;color:#64748b" id="short-desc">株価下落で利益。借り株を高値で売り、安値で買い戻して差益を得る信用取引です。</div>
+      </div>
+
+      <!-- 空売り返済フォーム -->
+      <div class="margin-form" id="mform-cover" style="display:none">
+        <div>
+          <label id="label-cover-stock">返済する空売りポジション</label>
+          <select id="cover-stock-select" style="margin-bottom:10px"></select>
+        </div>
+        <div>
+          <label id="label-cover-qty">返済数量</label>
+          <input type="number" id="cover-qty" value="10" min="1">
+        </div>
+        <div class="leverage-display" id="cover-pnl-preview">
+          <span id="label-cover-pnl">概算損益</span>
+          <strong id="cover-pnl-val" style="color:#94a3b8">--</strong>
+        </div>
+        <button class="btn-cover" onclick="tradeMargin('cover')" id="btn-cover-label">空売り返済（買い戻し）</button>
+      </div>
+
+      <!-- 信用買い新規フォーム -->
+      <div class="margin-form" id="mform-llong" style="display:none">
+        <div class="margin-form-row">
+          <div>
+            <label id="label-llong-qty">信用買い数量</label>
+            <input type="number" id="llong-qty" value="10" min="1">
+          </div>
+          <div>
+            <label id="label-llong-leverage">レバレッジ</label>
+            <select id="llong-leverage">
+              <option value="1">1倍（等倍）</option>
+              <option value="2" selected>2倍</option>
+              <option value="3">3倍</option>
+            </select>
+          </div>
+        </div>
+        <div class="leverage-display">
+          <span id="label-llong-required">必要証拠金</span>
+          <strong id="llong-required-val">--</strong>
+        </div>
+        <button class="btn-margin-buy" onclick="tradeMargin('llong')" id="btn-llong-label">信用買い注文（新規）</button>
+        <div style="margin-top:8px;font-size:10px;color:#64748b" id="llong-desc">レバレッジをかけて現金以上の買いポジションを持てます。利益も損失も倍率分拡大します。</div>
+      </div>
+
+      <!-- 信用買い返済フォーム -->
+      <div class="margin-form" id="mform-lclose" style="display:none">
+        <div>
+          <label id="label-lclose-stock">返済する信用買いポジション</label>
+          <select id="lclose-stock-select" style="margin-bottom:10px"></select>
+        </div>
+        <div>
+          <label id="label-lclose-qty">返済数量</label>
+          <input type="number" id="lclose-qty" value="10" min="1">
+        </div>
+        <div class="leverage-display" id="lclose-pnl-preview">
+          <span id="label-lclose-pnl">概算損益</span>
+          <strong id="lclose-pnl-val" style="color:#94a3b8">--</strong>
+        </div>
+        <button class="btn-close-long" onclick="tradeMargin('lclose')" id="btn-lclose-label">信用買い返済（転売）</button>
+      </div>
+
+      <!-- ショートポジション一覧 -->
+      <div class="short-positions-list" id="short-positions-list"></div>
+    </div>
+  </div>
+
+  <!-- P/L 損益計算パネル -->
+  <div class="pl-panel">
+    <div class="pl-panel-header" onclick="togglePlPanel()">
+      <span class="pl-panel-title">💹 <span id="label-pl-panel">リアルタイム損益（P/L）</span></span>
+      <span class="pl-panel-chevron" id="pl-panel-chevron">▼</span>
+    </div>
+    <div id="pl-panel-body" class="pl-panel-body">
+      <!-- サマリーバー -->
+      <div class="pl-summary-bar">
+        <div class="pl-summary-cell">
+          <span class="pl-summary-label" id="pl-label-cost">投資元本</span>
+          <span class="pl-summary-value" id="pl-cost-val">--</span>
+        </div>
+        <div class="pl-summary-cell">
+          <span class="pl-summary-label" id="pl-label-mkt">時価評価額</span>
+          <span class="pl-summary-value" id="pl-mkt-val">--</span>
+        </div>
+        <div class="pl-summary-cell">
+          <span class="pl-summary-label" id="pl-label-ret">損益率</span>
+          <span class="pl-summary-value" id="pl-ret-val">--</span>
+        </div>
+      </div>
+      <!-- ヒーロー表示 -->
+      <div class="pl-hero zero" id="pl-hero">
+        <div class="pl-hero-label" id="pl-hero-label">含み損益（ポートフォリオ合計）</div>
+        <div class="pl-hero-value zero" id="pl-hero-value">¥0</div>
+        <div class="pl-hero-sub"  id="pl-hero-sub">--</div>
+        <div class="pl-hero-usd"  id="pl-hero-usd"></div>
+      </div>
+      <!-- 銘柄別バー -->
+      <div class="pl-breakdown-title" id="pl-breakdown-title">銘柄別 含み損益</div>
+      <div id="pl-rows"></div>
+      <!-- 実現損益 -->
+      <div class="pl-realized-section">
+        <div class="pl-breakdown-title" id="pl-realized-title">実現損益（確定済み）</div>
+        <div class="pl-realized-row">
+          <span class="pl-realized-label" id="pl-label-realized">累計実現損益</span>
+          <span class="pl-realized-value" id="pl-realized-val">--</span>
+        </div>
+        <div class="pl-realized-row">
+          <span class="pl-realized-label" id="pl-label-trades">売買回数</span>
+          <span class="pl-realized-value" id="pl-trades-val">--</span>
+        </div>
+        <div class="pl-realized-row">
+          <span class="pl-realized-label" id="pl-label-winrate">勝率</span>
+          <span class="pl-realized-value" id="pl-winrate-val">--</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 資産推移グラフ -->
+  <div class="asset-history-panel">
+    <div class="asset-history-header" onclick="toggleAssetHistoryPanel()">
+      <span class="asset-history-title">📈 <span id="label-asset-history">総資産推移</span></span>
+      <span class="asset-history-toggle" id="asset-history-chevron">▼</span>
+    </div>
+    <div id="asset-history-body">
+      <div class="asset-history-summary">
+        <div class="ah-stat">
+          <span class="ah-stat-label" id="ah-label-start">開始時資産</span>
+          <span class="ah-stat-value" id="ah-start-val">--</span>
+        </div>
+        <div class="ah-stat">
+          <span class="ah-stat-label" id="ah-label-current">現在の総資産</span>
+          <span class="ah-stat-value" id="ah-current-val">--</span>
+        </div>
+        <div class="ah-stat">
+          <span class="ah-stat-label" id="ah-label-change">累計損益</span>
+          <span class="ah-stat-value" id="ah-change-val">--</span>
+        </div>
+        <div class="ah-stat">
+          <span class="ah-stat-label" id="ah-label-changepct">損益率</span>
+          <span class="ah-stat-value" id="ah-changepct-val">--</span>
+        </div>
+      </div>
+      <div class="asset-chart-wrap">
+        <div class="asset-chart-range">
+          <button class="range-btn active" onclick="setAhRange('all',this)" id="ah-range-all">全期間</button>
+          <button class="range-btn" onclick="setAhRange('1h',this)" id="ah-range-1h">1h</button>
+          <button class="range-btn" onclick="setAhRange('3h',this)" id="ah-range-3h">3h</button>
+          <button class="range-btn" onclick="setAhRange('1d',this)" id="ah-range-1d">1d</button>
+        </div>
+        <canvas id="asset-history-canvas"></canvas>
+        <div id="ah-no-data" class="ah-no-data" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分散分析パネル -->
+  <div class="diversification-panel">
+    <div class="div-panel-header" onclick="toggleDivPanel()">
+      <span class="div-panel-title">📊 <span id="label-div-panel">ポートフォリオ分散分析</span></span>
+      <span class="div-panel-toggle" id="div-panel-chevron">▼</span>
+    </div>
+    <div id="div-panel-body">
+      <!-- 銘柄配分バー -->
+      <div id="allocation-bars"></div>
+      <!-- 分散スコア -->
+      <div class="div-score-row">
+        <div class="div-score-box">
+          <span class="div-score-label" id="label-hhi">HHI集中度</span>
+          <span class="div-score-value" id="div-hhi">--</span>
+        </div>
+        <div class="div-score-box">
+          <span class="div-score-label" id="label-top1w">最大銘柄比率</span>
+          <span class="div-score-value" id="div-top1">--</span>
+        </div>
+        <div class="div-score-box">
+          <span class="div-score-label" id="label-avg-corr">平均相関係数</span>
+          <span class="div-score-value" id="div-avg-corr">--</span>
+        </div>
+      </div>
+      <!-- 相関マトリクス -->
+      <div class="corr-section" id="corr-section">
+        <div class="corr-title" id="label-corr-matrix">📐 銘柄間 相関マトリクス（10秒足データ）</div>
+        <div id="corr-matrix-wrap"></div>
+        <div class="div-note" id="div-analysis-note"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="state-manager.js"></script>
+<script src="api-client.js"></script>
+<script src="trading-engine.js"></script>
+<script src="ui-renderer.js"></script>
+<script src="pwa-install.js"></script>
+</body>
+</html>
