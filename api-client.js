@@ -140,24 +140,31 @@ async function fetchBuffettMetrics(k) {
     const eps = m.epsBasicExclExtraTTM ?? m.epsNormalizedAnnual ?? null;
     // BPS: bookValuePerShareQuarterly → なければ bookValuePerShareAnnual
     const bps = m.bookValuePerShareQuarterly ?? m.bookValuePerShareAnnual ?? null;
-    // PEG計算用: PER(pe) と EPS成長率
-    // PER: peTTM (TTMベース) → なければ peNormalizedAnnual
+    // 実績PER: peTTM (TTMベース) → なければ peNormalizedAnnual
     const pe  = m.peTTM ?? m.peNormalizedAnnual ?? null;
-    // EPS成長率: eps5YearGrowth → eps3YearGrowth → epsGrowth3Y → epsGrowth5Y (Finnhubフィールド名の揺れ対応)
+    // フォワードPER: 来期予想EPSベースのPER（無料プランでも取得可能なケースが多い）
+    const forwardPe = m.forwardPE ?? null;
+    // EPS成長率（複数フィールドを優先順でフォールバック）
+    // epsTTMToTTMGrowth: 直近TTM vs 前年TTM比（最も取れやすい） → 5年・3年成長率
     const epsGrowth = m['5YearEPSGrowth'] ?? m['3YearEPSGrowth'] ?? m.epsTTMToTTMGrowth ?? null;
+    // 売上成長率（EPS成長率が取れない場合の代替指標）
+    const revenueGrowth = m.revenueGrowthTTMYoy ?? m['5YearRevenueGrowth'] ?? null;
     const isJp = isJpStock(k);
 
     if (eps !== null && bps !== null) {
-      stockFinancials[k] = { eps, bps, pe, epsGrowth, jpy: isJp, loading: false };
+      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, jpy: isJp, loading: false };
     } else {
-      stockFinancials[k] = { pe, epsGrowth, loading: false, error: 'NO_DATA' };
+      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, loading: false, error: 'NO_DATA' };
     }
   } catch (e) {
     stockFinancials[k] = { loading: false, error: 'FETCH_ERROR' };
   }
 
   // 取得完了後に現在の銘柄なら即描画
-  if (k === currentStock) updateBuffettMetrics(k);
+  if (k === currentStock) {
+    updateBuffettMetrics(k);
+    updatePegRatio(k); // フォワードPER・PEG・フォワードPEG を一括更新
+  }
 }
 
 // ============================================================

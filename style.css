@@ -136,10 +136,13 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 .metric-box.buffett-margin-pos .metric-value { color: #22c55e; }
 .metric-box.buffett-margin-neg .metric-value { color: #ef4444; }
 
-/* PEGレシオ */
-.metric-box.peg-cheap .metric-value  { color: #22c55e; }
-.metric-box.peg-fair .metric-value   { color: #f59e0b; }
+/* PEGレシオ / フォワードPEG */
+.metric-box.peg-cheap .metric-value     { color: #22c55e; }
+.metric-box.peg-fair .metric-value      { color: #f59e0b; }
 .metric-box.peg-expensive .metric-value { color: #ef4444; }
+/* フォワードPER */
+.metric-box.fwd-per-cheap .metric-value     { color: #22c55e; }
+.metric-box.fwd-per-expensive .metric-value { color: #ef4444; }
 .peg-badge {
   display: inline-block; font-size: 10px; font-weight: bold;
   padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle;

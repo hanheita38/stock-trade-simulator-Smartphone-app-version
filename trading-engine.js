@@ -218,66 +218,209 @@ function updateBuffettMetrics(k) {
 }
 
 // ============================================================
-// PEGレシオ
+// フォワードPER・PEGレシオ・フォワードPEG
 // ============================================================
 
 /**
- * PEGレシオを計算してUIに反映する
+ * EPS成長率（%表示）を正規化する
+ * Finnhub は小数（0.25 = 25%）と整数（25 = 25%）が混在するため統一する
+ * @param {number|null} raw - 生の成長率値
+ * @returns {number|null} %表示の成長率（正値のみ有効）
+ */
+function _normalizeGrowthPct(raw) {
+  if (raw === null || raw === undefined || !isFinite(raw)) return null;
+  // 絶対値が3未満なら小数表現とみなして100倍
+  const pct = Math.abs(raw) < 3 ? raw * 100 : raw;
+  return pct > 0 ? pct : null; // 負成長はPEG計算に使わない
+}
+
+/**
+ * PEGバッジのクラスとテキストを返す
+ * @param {number} peg
+ * @returns {{ cls: string, text: string }}
+ */
+function _pegBadge(peg) {
+  const t = I18N[lang];
+  if (peg < 1)  return { cls: 'cheap',     text: t.pegCheap };
+  if (peg < 2)  return { cls: 'fair',      text: t.pegFair };
+  return          { cls: 'expensive', text: t.pegExpensive };
+}
+
+/**
+ * フォワードPER を計算してUIに反映する
+ * @param {string} k - 銘柄コード
+ */
+function updateForwardPer(k) {
+  const fwdBox  = document.getElementById('forward-per-box');
+  const fwdVal  = document.getElementById('forward-per-val');
+  const fwdDesc = document.getElementById('desc-forward-per');
+  const fwdLbl  = document.getElementById('label-forward-per');
+  if (!fwdBox) return;
+
+  const isJa = lang === 'ja';
+  if (fwdLbl) fwdLbl.textContent = isJa ? '🔭 フォワードPER' : '🔭 Forward P/E';
+
+  const fin = stockFinancials[k];
+
+  if (!fin || fin.loading) {
+    fwdVal.textContent = isJa ? '取得中...' : 'Loading...';
+    fwdBox.className = 'metric-box';
+    return;
+  }
+
+  // ── フォワードPER の取得ルート ──────────────────────────
+  // Route A: Finnhub metric.forwardPE（直接取得できれば最高精度）
+  // Route B: 次回決算の epsEstimate と現在株価から逆算
+  //          フォワードPE = 現在株価(USD) ÷ 来期予想EPS(USD)
+  let fwdPe = fin.forwardPe ?? null;
+
+  if ((fwdPe === null || !isFinite(fwdPe) || fwdPe <= 0)) {
+    // Route B: nextEarnings[k].epsEstimate を利用
+    const ne = nextEarnings[k];
+    const curPriceJpy = (prices[k] && prices[k].length > 0) ? prices[k][prices[k].length - 1] : null;
+    if (ne && ne.epsEstimate && isFinite(ne.epsEstimate) && ne.epsEstimate > 0 && curPriceJpy) {
+      // prices[] は常に円建て → USD建てEPS予想と比較するためfxRateで割る
+      const curPriceUsd = isJpStock(k) ? null : curPriceJpy / fxRate;
+      if (curPriceUsd) {
+        fwdPe = curPriceUsd / ne.epsEstimate;
+      }
+    }
+  }
+
+  if (fwdPe === null || !isFinite(fwdPe) || fwdPe <= 0) {
+    fwdVal.textContent = isJa ? 'データなし' : 'N/A';
+    fwdBox.className   = 'metric-box';
+    if (fwdDesc) fwdDesc.textContent = isJa
+      ? '来期予想EPSが取得できませんでした（日本株・一部米国株は非対応）'
+      : 'Forward EPS estimate unavailable for this ticker';
+    return;
+  }
+
+  fwdVal.textContent = fwdPe.toFixed(1) + 'x';
+
+  // 実績PERとの比較コメント
+  const trailingPe = fin.pe;
+  let cmpNote = '';
+  if (trailingPe && isFinite(trailingPe) && trailingPe > 0) {
+    const diff = fwdPe - trailingPe;
+    const sign = diff >= 0 ? '+' : '';
+    cmpNote = isJa
+      ? `（実績PER ${trailingPe.toFixed(1)}x 比 ${sign}${diff.toFixed(1)}）`
+      : ` (vs trailing P/E ${trailingPe.toFixed(1)}x, ${sign}${diff.toFixed(1)})`;
+  }
+
+  const srcNote = fin.forwardPe
+    ? (isJa ? 'Finnhubアナリスト予想' : 'Finnhub analyst estimate')
+    : (isJa ? '次回決算EPS予想より逆算' : 'derived from next earnings EPS estimate');
+  if (fwdDesc) fwdDesc.textContent = isJa
+    ? `フォワードPER: ${fwdPe.toFixed(1)}x${cmpNote}。出典: ${srcNote}`
+    : `Forward P/E: ${fwdPe.toFixed(1)}x${cmpNote}. Source: ${srcNote}`;
+
+  // 色付け（25x超 = 割高気味、15x未満 = 割安気味）
+  fwdBox.className = 'metric-box' +
+    (fwdPe < 15 ? ' fwd-per-cheap' : fwdPe < 25 ? '' : ' fwd-per-expensive');
+
+  // フォワードPEを fin に保存してフォワードPEG計算で使えるようにする
+  fin._computedForwardPe = fwdPe;
+}
+
+/**
+ * PEGレシオ（実績PEG）と フォワードPEG を計算してUIに反映する
  * @param {string} k - 銘柄コード
  */
 function updatePegRatio(k) {
+  // ── フォワードPERを先に更新（_computedForwardPe を fin に書き込む）
+  updateForwardPer(k);
+
   const pegBox  = document.getElementById('peg-ratio-box');
   const pegVal  = document.getElementById('peg-ratio-val');
   const pegDesc = document.getElementById('desc-peg-ratio');
-  const fin     = stockFinancials[k];
-  const t       = I18N[lang];
+  const fwdPegBox  = document.getElementById('forward-peg-box');
+  const fwdPegVal  = document.getElementById('forward-peg-val');
+  const fwdPegDesc = document.getElementById('desc-forward-peg');
+  const fwdPegLbl  = document.getElementById('label-forward-peg');
+  const pegLbl     = document.getElementById('label-peg-ratio');
+  const fin        = stockFinancials[k];
+  const isJa       = lang === 'ja';
+  const t          = I18N[lang];
 
+  // ラベル更新
+  if (pegLbl)    pegLbl.textContent    = isJa ? '📈 PEGレシオ（実績）' : '📈 PEG Ratio (Trailing)';
+  if (fwdPegLbl) fwdPegLbl.textContent = isJa ? '🚀 フォワードPEG'    : '🚀 Forward PEG';
+
+  // ── Loading 状態 ──
   if (!fin || fin.loading) {
-    pegVal.innerHTML = lang === 'ja' ? '取得中...' : 'Loading...';
-    pegBox.className = 'metric-box';
+    if (pegVal)    pegVal.innerHTML = isJa ? '取得中...' : 'Loading...';
+    if (fwdPegVal) fwdPegVal.innerHTML = isJa ? '取得中...' : 'Loading...';
+    if (pegBox)    pegBox.className = 'metric-box';
+    if (fwdPegBox) fwdPegBox.className = 'metric-box';
     return;
   }
 
+  // ── 成長率の正規化（実績PEG・フォワードPEG で共用） ──
+  // 優先: EPS成長率 → 取れなければ 売上成長率（代替）
+  const growthPct = _normalizeGrowthPct(fin.epsGrowth)
+                 ?? _normalizeGrowthPct(fin.revenueGrowth);
+
+  // ─────────────────────────────────────────
+  // 実績PEG（Trailing PEG = 実績PER ÷ 成長率）
+  // ─────────────────────────────────────────
   const pe = fin.pe;
-  let growthPct = fin.epsGrowth;
-
-  if (pe === null || pe === undefined || !isFinite(pe) || pe <= 0) {
-    pegVal.textContent = t.pegNoData;
-    pegBox.className   = 'metric-box';
-    pegDesc.textContent= t.pegRatioDesc;
-    return;
-  }
-
-  if (growthPct === null || growthPct === undefined || !isFinite(growthPct) || growthPct <= 0) {
-    pegVal.textContent = `PER: ${pe.toFixed(1)}`;
-    pegBox.className   = 'metric-box';
-    pegDesc.textContent= lang === 'ja'
-      ? `PER: ${pe.toFixed(1)}（EPS成長率データなし、PEG算出不可）`
-      : `P/E: ${pe.toFixed(1)} (EPS growth data unavailable)`;
-    return;
-  }
-
-  // growthPct が小数（例: 0.25 = 25%）の場合は100倍して%変換
-  if (Math.abs(growthPct) < 3) growthPct = growthPct * 100;
-
-  const peg = pe / growthPct;
-
-  let badgeClass, badgeText;
-  if (peg < 1) {
-    badgeClass = 'cheap'; badgeText = t.pegCheap;
-    pegBox.className = 'metric-box peg-cheap';
-  } else if (peg < 2) {
-    badgeClass = 'fair'; badgeText = t.pegFair;
-    pegBox.className = 'metric-box peg-fair';
+  if (!pe || !isFinite(pe) || pe <= 0) {
+    if (pegVal)    pegVal.textContent  = t.pegNoData ?? 'N/A';
+    if (pegBox)    pegBox.className    = 'metric-box';
+    if (pegDesc)   pegDesc.textContent = isJa
+      ? '実績PERデータが取得できませんでした'
+      : 'Trailing P/E data unavailable';
+  } else if (!growthPct) {
+    // PERだけ表示・PEG算出不可
+    if (pegVal)  pegVal.textContent  = `${pe.toFixed(1)}x`;
+    if (pegBox)  pegBox.className    = 'metric-box';
+    if (pegDesc) pegDesc.textContent = isJa
+      ? `実績PER: ${pe.toFixed(1)}x（EPS成長率データなし → PEG算出不可）`
+      : `Trailing P/E: ${pe.toFixed(1)}x (EPS growth unavailable → PEG not calculable)`;
   } else {
-    badgeClass = 'expensive'; badgeText = t.pegExpensive;
-    pegBox.className = 'metric-box peg-expensive';
+    const peg    = pe / growthPct;
+    const badge  = _pegBadge(peg);
+    if (pegVal)  pegVal.innerHTML    = `${peg.toFixed(2)}<span class="peg-badge ${badge.cls}">${badge.text}</span>`;
+    if (pegBox)  pegBox.className    = `metric-box peg-${badge.cls}`;
+    if (pegDesc) pegDesc.textContent = isJa
+      ? `実績PER ${pe.toFixed(1)}x ÷ EPS成長率 ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}。1未満が割安の目安。`
+      : `Trailing P/E ${pe.toFixed(1)}x ÷ EPS growth ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}. Under 1 is undervalued.`;
   }
 
-  pegVal.innerHTML    = `${peg.toFixed(2)}<span class="peg-badge ${badgeClass}">${badgeText}</span>`;
-  pegDesc.textContent = lang === 'ja'
-    ? `PER ${pe.toFixed(1)} ÷ EPS成長率 ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}。1未満が割安の目安。`
-    : `P/E ${pe.toFixed(1)} ÷ EPS growth ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}. Under 1 is undervalued.`;
+  // ─────────────────────────────────────────
+  // フォワードPEG（Forward PEG = フォワードPER ÷ 成長率）
+  // ─────────────────────────────────────────
+  if (!fwdPegBox) return;
+
+  const fwdPe = fin._computedForwardPe ?? null;
+
+  if (!fwdPe || !isFinite(fwdPe) || fwdPe <= 0) {
+    if (fwdPegVal)  fwdPegVal.textContent  = isJa ? 'データなし' : 'N/A';
+    if (fwdPegBox)  fwdPegBox.className    = 'metric-box';
+    if (fwdPegDesc) fwdPegDesc.textContent = isJa
+      ? 'フォワードPERが取得できないためフォワードPEGを算出できません'
+      : 'Forward P/E unavailable; cannot compute forward PEG';
+    return;
+  }
+
+  if (!growthPct) {
+    if (fwdPegVal)  fwdPegVal.textContent  = `${fwdPe.toFixed(1)}x`;
+    if (fwdPegBox)  fwdPegBox.className    = 'metric-box';
+    if (fwdPegDesc) fwdPegDesc.textContent = isJa
+      ? `フォワードPER: ${fwdPe.toFixed(1)}x（EPS成長率データなし → フォワードPEG算出不可）`
+      : `Forward P/E: ${fwdPe.toFixed(1)}x (EPS growth unavailable → Forward PEG not calculable)`;
+    return;
+  }
+
+  const fwdPeg   = fwdPe / growthPct;
+  const fwdBadge = _pegBadge(fwdPeg);
+  if (fwdPegVal)  fwdPegVal.innerHTML    = `${fwdPeg.toFixed(2)}<span class="peg-badge ${fwdBadge.cls}">${fwdBadge.text}</span>`;
+  if (fwdPegBox)  fwdPegBox.className    = `metric-box peg-${fwdBadge.cls}`;
+  if (fwdPegDesc) fwdPegDesc.textContent = isJa
+    ? `フォワードPER ${fwdPe.toFixed(1)}x ÷ EPS成長率 ${growthPct.toFixed(1)}% = ${fwdPeg.toFixed(2)}。1未満が来期割安の目安。`
+    : `Forward P/E ${fwdPe.toFixed(1)}x ÷ EPS growth ${growthPct.toFixed(1)}% = ${fwdPeg.toFixed(2)}. Under 1 suggests undervalued.`;
 }
 
 // ============================================================
