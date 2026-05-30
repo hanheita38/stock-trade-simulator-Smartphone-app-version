@@ -218,209 +218,173 @@ function updateBuffettMetrics(k) {
 }
 
 // ============================================================
-// フォワードPER・PEGレシオ・フォワードPEG
+// 割安株スクリーニング指標
+// 優先度: ① FCF Yield / オーナー利益利回り  ② EV/FCF  ③ 実績PER
+//
+// Finnhub 無料プランで実際に取れるフィールド（実測確認済み）:
+//   pfcfTTM   = Price / Free Cash Flow per share (TTM)
+//               → FCF Yield(%) = 1 / pfcfTTM * 100
+//   fcfMarginTTM / fcfMargin = FCF / Revenue (%) ← 補足情報
+//   currentEv/freeCashFlowTTM  = EV/FCF（スラッシュ入りキー名）
+//   currentEv/freeCashFlowAnnual も存在するケースあり
+//   peTTM     = 実績PER
+//   marketCapitalization = 時価総額 (millions USD)
+//   psTTM     = Price / Sales
+// ※ evToEbitdaTTM / freeCashFlowTTM 等は無料プランでは返らない
 // ============================================================
 
 /**
- * EPS成長率（%表示）を正規化する
- * Finnhub は小数（0.25 = 25%）と整数（25 = 25%）が混在するため統一する
- * @param {number|null} raw - 生の成長率値
- * @returns {number|null} %表示の成長率（正値のみ有効）
- */
-function _normalizeGrowthPct(raw) {
-  if (raw === null || raw === undefined || !isFinite(raw)) return null;
-  // 絶対値が3未満なら小数表現とみなして100倍
-  const pct = Math.abs(raw) < 3 ? raw * 100 : raw;
-  return pct > 0 ? pct : null; // 負成長はPEG計算に使わない
-}
-
-/**
- * PEGバッジのクラスとテキストを返す
- * @param {number} peg
+ * 割安バッジ情報を返すユーティリティ
+ * @param {'cheap'|'fair'|'expensive'|'neutral'} level
  * @returns {{ cls: string, text: string }}
  */
-function _pegBadge(peg) {
-  const t = I18N[lang];
-  if (peg < 1)  return { cls: 'cheap',     text: t.pegCheap };
-  if (peg < 2)  return { cls: 'fair',      text: t.pegFair };
-  return          { cls: 'expensive', text: t.pegExpensive };
-}
-
-/**
- * フォワードPER を計算してUIに反映する
- * @param {string} k - 銘柄コード
- */
-function updateForwardPer(k) {
-  const fwdBox  = document.getElementById('forward-per-box');
-  const fwdVal  = document.getElementById('forward-per-val');
-  const fwdDesc = document.getElementById('desc-forward-per');
-  const fwdLbl  = document.getElementById('label-forward-per');
-  if (!fwdBox) return;
-
+function _valueBadge(level) {
   const isJa = lang === 'ja';
-  if (fwdLbl) fwdLbl.textContent = isJa ? '🔭 フォワードPER' : '🔭 Forward P/E';
-
-  const fin = stockFinancials[k];
-
-  if (!fin || fin.loading) {
-    fwdVal.textContent = isJa ? '取得中...' : 'Loading...';
-    fwdBox.className = 'metric-box';
-    return;
-  }
-
-  // ── フォワードPER の取得ルート ──────────────────────────
-  // Route A: Finnhub metric.forwardPE（直接取得できれば最高精度）
-  // Route B: 次回決算の epsEstimate と現在株価から逆算
-  //          フォワードPE = 現在株価(USD) ÷ 来期予想EPS(USD)
-  let fwdPe = fin.forwardPe ?? null;
-
-  if ((fwdPe === null || !isFinite(fwdPe) || fwdPe <= 0)) {
-    // Route B: nextEarnings[k].epsEstimate を利用
-    const ne = nextEarnings[k];
-    const curPriceJpy = (prices[k] && prices[k].length > 0) ? prices[k][prices[k].length - 1] : null;
-    if (ne && ne.epsEstimate && isFinite(ne.epsEstimate) && ne.epsEstimate > 0 && curPriceJpy) {
-      // prices[] は常に円建て → USD建てEPS予想と比較するためfxRateで割る
-      const curPriceUsd = isJpStock(k) ? null : curPriceJpy / fxRate;
-      if (curPriceUsd) {
-        fwdPe = curPriceUsd / ne.epsEstimate;
-      }
-    }
-  }
-
-  if (fwdPe === null || !isFinite(fwdPe) || fwdPe <= 0) {
-    fwdVal.textContent = isJa ? 'データなし' : 'N/A';
-    fwdBox.className   = 'metric-box';
-    if (fwdDesc) fwdDesc.textContent = isJa
-      ? '来期予想EPSが取得できませんでした（日本株・一部米国株は非対応）'
-      : 'Forward EPS estimate unavailable for this ticker';
-    return;
-  }
-
-  fwdVal.textContent = fwdPe.toFixed(1) + 'x';
-
-  // 実績PERとの比較コメント
-  const trailingPe = fin.pe;
-  let cmpNote = '';
-  if (trailingPe && isFinite(trailingPe) && trailingPe > 0) {
-    const diff = fwdPe - trailingPe;
-    const sign = diff >= 0 ? '+' : '';
-    cmpNote = isJa
-      ? `（実績PER ${trailingPe.toFixed(1)}x 比 ${sign}${diff.toFixed(1)}）`
-      : ` (vs trailing P/E ${trailingPe.toFixed(1)}x, ${sign}${diff.toFixed(1)})`;
-  }
-
-  const srcNote = fin.forwardPe
-    ? (isJa ? 'Finnhubアナリスト予想' : 'Finnhub analyst estimate')
-    : (isJa ? '次回決算EPS予想より逆算' : 'derived from next earnings EPS estimate');
-  if (fwdDesc) fwdDesc.textContent = isJa
-    ? `フォワードPER: ${fwdPe.toFixed(1)}x${cmpNote}。出典: ${srcNote}`
-    : `Forward P/E: ${fwdPe.toFixed(1)}x${cmpNote}. Source: ${srcNote}`;
-
-  // 色付け（25x超 = 割高気味、15x未満 = 割安気味）
-  fwdBox.className = 'metric-box' +
-    (fwdPe < 15 ? ' fwd-per-cheap' : fwdPe < 25 ? '' : ' fwd-per-expensive');
-
-  // フォワードPEを fin に保存してフォワードPEG計算で使えるようにする
-  fin._computedForwardPe = fwdPe;
+  const map = {
+    cheap:     { cls: 'val-cheap',     text: isJa ? '割安'   : 'Cheap'     },
+    fair:      { cls: 'val-fair',      text: isJa ? '適正'   : 'Fair'      },
+    expensive: { cls: 'val-expensive', text: isJa ? '割高'   : 'Expensive' },
+    neutral:   { cls: 'val-neutral',   text: isJa ? 'N/A'    : 'N/A'       },
+  };
+  return map[level] || map.neutral;
 }
 
 /**
- * PEGレシオ（実績PEG）と フォワードPEG を計算してUIに反映する
+ * FCF Yield / EV/FCF / 実績PER を計算してUIに一括反映する
  * @param {string} k - 銘柄コード
  */
-function updatePegRatio(k) {
-  // ── フォワードPERを先に更新（_computedForwardPe を fin に書き込む）
-  updateForwardPer(k);
+function updateValueMetrics(k) {
+  const fin  = stockFinancials[k];
+  const isJa = lang === 'ja';
+  const load = isJa ? '取得中...' : 'Loading...';
+  const na   = isJa ? 'データなし' : 'N/A';
 
-  const pegBox  = document.getElementById('peg-ratio-box');
-  const pegVal  = document.getElementById('peg-ratio-val');
-  const pegDesc = document.getElementById('desc-peg-ratio');
-  const fwdPegBox  = document.getElementById('forward-peg-box');
-  const fwdPegVal  = document.getElementById('forward-peg-val');
-  const fwdPegDesc = document.getElementById('desc-forward-peg');
-  const fwdPegLbl  = document.getElementById('label-forward-peg');
-  const pegLbl     = document.getElementById('label-peg-ratio');
-  const fin        = stockFinancials[k];
-  const isJa       = lang === 'ja';
-  const t          = I18N[lang];
+  // ── ① FCF利回り（フリーキャッシュフロー利回り / オーナー利益利回り） ──
+  // Finnhub が返す pfcfTTM = Price ÷ FCF per share
+  // ∴ FCF Yield(%) = 1 / pfcfTTM * 100
+  (function renderFcfYield() {
+    const box  = document.getElementById('fcf-yield-box');
+    const val  = document.getElementById('fcf-yield-val');
+    const desc = document.getElementById('desc-fcf-yield');
+    const lbl  = document.getElementById('label-fcf-yield');
+    if (!box) return;
+    if (lbl) lbl.textContent = isJa ? '💵 FCF利回り（オーナー利益）' : '💵 FCF Yield (Owner Earnings)';
 
-  // ラベル更新
-  if (pegLbl)    pegLbl.textContent    = isJa ? '📈 PEGレシオ（実績）' : '📈 PEG Ratio (Trailing)';
-  if (fwdPegLbl) fwdPegLbl.textContent = isJa ? '🚀 フォワードPEG'    : '🚀 Forward PEG';
+    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
 
-  // ── Loading 状態 ──
-  if (!fin || fin.loading) {
-    if (pegVal)    pegVal.innerHTML = isJa ? '取得中...' : 'Loading...';
-    if (fwdPegVal) fwdPegVal.innerHTML = isJa ? '取得中...' : 'Loading...';
-    if (pegBox)    pegBox.className = 'metric-box';
-    if (fwdPegBox) fwdPegBox.className = 'metric-box';
-    return;
-  }
+    // pfcfTTM = P/FCF 倍率 → FCF Yield = 1/pfcfTTM * 100
+    const pfcf = fin.pfcfTTM;
+    if (pfcf == null || !isFinite(pfcf) || pfcf === 0) {
+      val.textContent = na; box.className = 'metric-box';
+      if (desc) desc.textContent = isJa
+        ? 'FCFデータが取得できませんでした（日本株・赤字企業・一部銘柄は非対応）'
+        : 'FCF data unavailable (Japanese stocks, loss-making companies, or some tickers)';
+      return;
+    }
 
-  // ── 成長率の正規化（実績PEG・フォワードPEG で共用） ──
-  // 優先: EPS成長率 → 取れなければ 売上成長率（代替）
-  const growthPct = _normalizeGrowthPct(fin.epsGrowth)
-                 ?? _normalizeGrowthPct(fin.revenueGrowth);
+    const yieldPct = (1 / pfcf) * 100;
+    const sign     = yieldPct >= 0 ? '' : '−';
+    const absYield = Math.abs(yieldPct);
 
-  // ─────────────────────────────────────────
-  // 実績PEG（Trailing PEG = 実績PER ÷ 成長率）
-  // ─────────────────────────────────────────
-  const pe = fin.pe;
-  if (!pe || !isFinite(pe) || pe <= 0) {
-    if (pegVal)    pegVal.textContent  = t.pegNoData ?? 'N/A';
-    if (pegBox)    pegBox.className    = 'metric-box';
-    if (pegDesc)   pegDesc.textContent = isJa
-      ? '実績PERデータが取得できませんでした'
-      : 'Trailing P/E data unavailable';
-  } else if (!growthPct) {
-    // PERだけ表示・PEG算出不可
-    if (pegVal)  pegVal.textContent  = `${pe.toFixed(1)}x`;
-    if (pegBox)  pegBox.className    = 'metric-box';
-    if (pegDesc) pegDesc.textContent = isJa
-      ? `実績PER: ${pe.toFixed(1)}x（EPS成長率データなし → PEG算出不可）`
-      : `Trailing P/E: ${pe.toFixed(1)}x (EPS growth unavailable → PEG not calculable)`;
-  } else {
-    const peg    = pe / growthPct;
-    const badge  = _pegBadge(peg);
-    if (pegVal)  pegVal.innerHTML    = `${peg.toFixed(2)}<span class="peg-badge ${badge.cls}">${badge.text}</span>`;
-    if (pegBox)  pegBox.className    = `metric-box peg-${badge.cls}`;
-    if (pegDesc) pegDesc.textContent = isJa
-      ? `実績PER ${pe.toFixed(1)}x ÷ EPS成長率 ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}。1未満が割安の目安。`
-      : `Trailing P/E ${pe.toFixed(1)}x ÷ EPS growth ${growthPct.toFixed(1)}% = ${peg.toFixed(2)}. Under 1 is undervalued.`;
-  }
+    // 判定: 8%超→割安 / 4〜8%→適正 / 4%未満 or 負→割高
+    let level;
+    if (yieldPct >= 8)      level = 'cheap';
+    else if (yieldPct >= 4) level = 'fair';
+    else                    level = 'expensive';
 
-  // ─────────────────────────────────────────
-  // フォワードPEG（Forward PEG = フォワードPER ÷ 成長率）
-  // ─────────────────────────────────────────
-  if (!fwdPegBox) return;
+    const badge = _valueBadge(level);
+    val.innerHTML = `${sign}${absYield.toFixed(2)}%<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
 
-  const fwdPe = fin._computedForwardPe ?? null;
+    // FCFマージンを補足
+    const marginNote = (fin.fcfMargin != null && isFinite(fin.fcfMargin))
+      ? (isJa ? ` / FCFマージン: ${fin.fcfMargin.toFixed(1)}%` : ` / FCF margin: ${fin.fcfMargin.toFixed(1)}%`)
+      : '';
+    const pfcfNote = isJa
+      ? `P/FCF倍率: ${pfcf.toFixed(1)}x${marginNote}`
+      : `P/FCF: ${pfcf.toFixed(1)}x${marginNote}`;
+    const guideline = isJa
+      ? '目安: 8%超→割安 / 4〜8%→適正 / 4%未満→割高。高いほどオーナーに還元される現金が多い。'
+      : 'Guide: >8% cheap / 4–8% fair / <4% expensive. Higher = more cash returned to owners.';
+    if (desc) desc.textContent = `FCF利回り: ${sign}${absYield.toFixed(2)}%（${pfcfNote}）。${guideline}`;
+  })();
 
-  if (!fwdPe || !isFinite(fwdPe) || fwdPe <= 0) {
-    if (fwdPegVal)  fwdPegVal.textContent  = isJa ? 'データなし' : 'N/A';
-    if (fwdPegBox)  fwdPegBox.className    = 'metric-box';
-    if (fwdPegDesc) fwdPegDesc.textContent = isJa
-      ? 'フォワードPERが取得できないためフォワードPEGを算出できません'
-      : 'Forward P/E unavailable; cannot compute forward PEG';
-    return;
-  }
+  // ── ② EV/FCF（企業価値 ÷ フリーキャッシュフロー）────────
+  // Finnhub フィールド: 'currentEv/freeCashFlowTTM'（スラッシュ入り）
+  // EV/EBITDAは無料プランで取れないため、EV/FCFで代替
+  // EV/FCFはEV/EBITDAより保守的で債務調整済みの割安度を示す
+  (function renderEvFcf() {
+    const box  = document.getElementById('ev-ebitda-box');  // HTMLのIDはそのまま流用
+    const val  = document.getElementById('ev-ebitda-val');
+    const desc = document.getElementById('desc-ev-ebitda');
+    const lbl  = document.getElementById('label-ev-ebitda');
+    if (!box) return;
+    if (lbl) lbl.textContent = isJa ? '🏢 EV/FCF（企業価値倍率）' : '🏢 EV/FCF (Enterprise Value)';
 
-  if (!growthPct) {
-    if (fwdPegVal)  fwdPegVal.textContent  = `${fwdPe.toFixed(1)}x`;
-    if (fwdPegBox)  fwdPegBox.className    = 'metric-box';
-    if (fwdPegDesc) fwdPegDesc.textContent = isJa
-      ? `フォワードPER: ${fwdPe.toFixed(1)}x（EPS成長率データなし → フォワードPEG算出不可）`
-      : `Forward P/E: ${fwdPe.toFixed(1)}x (EPS growth unavailable → Forward PEG not calculable)`;
-    return;
-  }
+    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
 
-  const fwdPeg   = fwdPe / growthPct;
-  const fwdBadge = _pegBadge(fwdPeg);
-  if (fwdPegVal)  fwdPegVal.innerHTML    = `${fwdPeg.toFixed(2)}<span class="peg-badge ${fwdBadge.cls}">${fwdBadge.text}</span>`;
-  if (fwdPegBox)  fwdPegBox.className    = `metric-box peg-${fwdBadge.cls}`;
-  if (fwdPegDesc) fwdPegDesc.textContent = isJa
-    ? `フォワードPER ${fwdPe.toFixed(1)}x ÷ EPS成長率 ${growthPct.toFixed(1)}% = ${fwdPeg.toFixed(2)}。1未満が来期割安の目安。`
-    : `Forward P/E ${fwdPe.toFixed(1)}x ÷ EPS growth ${growthPct.toFixed(1)}% = ${fwdPeg.toFixed(2)}. Under 1 suggests undervalued.`;
+    // 'currentEv/freeCashFlowTTM' はスラッシュを含むキー名
+    const evFcf = fin.evToFcf;
+    if (evFcf == null || !isFinite(evFcf) || evFcf <= 0) {
+      val.textContent = na; box.className = 'metric-box';
+      if (desc) desc.textContent = isJa
+        ? 'EV/FCFデータが取得できませんでした（日本株・赤字企業は非対応）'
+        : 'EV/FCF data unavailable (Japanese stocks, loss-making companies)';
+      return;
+    }
+
+    // 判定: 15倍未満→割安 / 15〜30倍→適正 / 30倍超→割高
+    // ※EV/FCFはEV/EBITDAより数値が大きくなる傾向があるため閾値を調整
+    let level;
+    if (evFcf < 15)       level = 'cheap';
+    else if (evFcf < 30)  level = 'fair';
+    else                  level = 'expensive';
+
+    const badge = _valueBadge(level);
+    val.innerHTML = `${evFcf.toFixed(1)}x<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
+
+    const guideline = isJa
+      ? '目安: 15倍未満→割安 / 15〜30倍→適正 / 30倍超→割高。負債も含めた企業全体のFCF割安度（EV/EBITDAの代替）。'
+      : 'Guide: <15x cheap / 15–30x fair / >30x expensive. Whole-enterprise FCF value incl. debt (proxy for EV/EBITDA).';
+    if (desc) desc.textContent = `EV/FCF: ${evFcf.toFixed(1)}x。${guideline}`;
+  })();
+
+  // ── ③ 実績PER（TTM）────────────────────────────────────────
+  (function renderTrailingPer() {
+    const box  = document.getElementById('trailing-per-box');
+    const val  = document.getElementById('trailing-per-val');
+    const desc = document.getElementById('desc-trailing-per');
+    const lbl  = document.getElementById('label-trailing-per');
+    if (!box) return;
+    if (lbl) lbl.textContent = isJa ? '📊 実績PER (TTM)' : '📊 Trailing P/E (TTM)';
+
+    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
+
+    const pe = fin.pe;
+    if (pe == null || !isFinite(pe) || pe <= 0) {
+      val.textContent = na; box.className = 'metric-box';
+      if (desc) desc.textContent = isJa
+        ? 'PERデータが取得できませんでした（赤字銘柄はPER算出不可）'
+        : 'P/E data unavailable (negative earnings companies have no P/E)';
+      return;
+    }
+
+    // 判定: 15倍未満→割安 / 15〜25倍→適正 / 25倍超→割高
+    let level;
+    if (pe < 15)      level = 'cheap';
+    else if (pe < 25) level = 'fair';
+    else              level = 'expensive';
+
+    const badge = _valueBadge(level);
+    val.innerHTML = `${pe.toFixed(1)}x<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
+
+    const guideline = isJa
+      ? '目安: 15倍未満→割安 / 15〜25倍→適正 / 25倍超→割高。業種・成長フェーズにより大きく異なる。'
+      : 'Guide: <15x cheap / 15–25x fair / >25x expensive. Varies widely by sector and growth stage.';
+    if (desc) desc.textContent = `実績PER: ${pe.toFixed(1)}x。${guideline}`;
+  })();
 }
 
 // ============================================================

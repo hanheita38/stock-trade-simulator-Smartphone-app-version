@@ -136,25 +136,53 @@ async function fetchBuffettMetrics(k) {
     const data = await res.json();
     const m    = data.metric || {};
 
-    // EPS: epsBasicExclExtraTTM (TTM基本EPS) → なければ epsNormalizedAnnual
+    // ── グレアム数用 ──────────────────────────────────────────
+    // EPS: epsBasicExclExtraTTM → epsNormalizedAnnual
     const eps = m.epsBasicExclExtraTTM ?? m.epsNormalizedAnnual ?? null;
-    // BPS: bookValuePerShareQuarterly → なければ bookValuePerShareAnnual
+    // BPS: bookValuePerShareQuarterly → bookValuePerShareAnnual
     const bps = m.bookValuePerShareQuarterly ?? m.bookValuePerShareAnnual ?? null;
-    // 実績PER: peTTM (TTMベース) → なければ peNormalizedAnnual
-    const pe  = m.peTTM ?? m.peNormalizedAnnual ?? null;
-    // フォワードPER: 来期予想EPSベースのPER（無料プランでも取得可能なケースが多い）
-    const forwardPe = m.forwardPE ?? null;
-    // EPS成長率（複数フィールドを優先順でフォールバック）
-    // epsTTMToTTMGrowth: 直近TTM vs 前年TTM比（最も取れやすい） → 5年・3年成長率
-    const epsGrowth = m['5YearEPSGrowth'] ?? m['3YearEPSGrowth'] ?? m.epsTTMToTTMGrowth ?? null;
-    // 売上成長率（EPS成長率が取れない場合の代替指標）
-    const revenueGrowth = m.revenueGrowthTTMYoy ?? m['5YearRevenueGrowth'] ?? null;
+
+    // ── 実績PER ───────────────────────────────────────────────
+    const pe = m.peTTM ?? m.peNormalizedAnnual ?? null;
+
+    // ── FCF Yield（フリーキャッシュフロー利回り）────────────
+    // pfcfTTM = Price / FCF per share (TTM)
+    // FCF Yield(%) = 1 / pfcfTTM * 100
+    // fcfMargin  = FCF / Revenue (%)  ← マージンとして補足表示に使う
+    // fcfPerShareTTM = FCF per share (USD)
+    const pfcfTTM      = m.pfcfTTM ?? null;         // Price/FCF倍率 ← これがキー
+    const fcfMargin    = m.fcfMarginTTM ?? m.fcfMargin ?? null;  // FCFマージン(%)
+    const fcfPerShare  = m.freeCashFlowPerShareTTM ?? m.fcfPerShareTTM ?? null;
+
+    // ── EV/EBITDA ─────────────────────────────────────────────
+    // Finnhub無料プランで確認できる関連フィールド:
+    //   currentEv/freeCashFlowTTM  ← EV/FCF（スラッシュ入りキー）
+    //   ev = Enterprise Value (in millions USD) ← series.annual にあり
+    //   marketCapitalization = 時価総額 (millions USD)
+    //   psTTM = Price/Sales
+    //   ebitPerShare = EBIT per share (EBITDAではなくEBIT)
+    // → 直接のEV/EBITDAは無料プランでは取れないため
+    //   EV/FCF で代替する（スラッシュ入りフィールド名に注意）
+    const evToFcf        = m['currentEv/freeCashFlowTTM'] ?? m['currentEv/freeCashFlowAnnual'] ?? null;
+    const marketCap      = m.marketCapitalization ?? null;  // millions USD
+    const psTTM          = m.psTTM ?? null;                 // Price/Sales
+
     const isJp = isJpStock(k);
 
     if (eps !== null && bps !== null) {
-      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, jpy: isJp, loading: false };
+      stockFinancials[k] = {
+        eps, bps, pe,
+        pfcfTTM, fcfMargin, fcfPerShare,
+        evToFcf, marketCap, psTTM,
+        jpy: isJp, loading: false,
+      };
     } else {
-      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, loading: false, error: 'NO_DATA' };
+      stockFinancials[k] = {
+        pe,
+        pfcfTTM, fcfMargin, fcfPerShare,
+        evToFcf, marketCap, psTTM,
+        loading: false, error: 'NO_DATA',
+      };
     }
   } catch (e) {
     stockFinancials[k] = { loading: false, error: 'FETCH_ERROR' };
@@ -163,7 +191,7 @@ async function fetchBuffettMetrics(k) {
   // 取得完了後に現在の銘柄なら即描画
   if (k === currentStock) {
     updateBuffettMetrics(k);
-    updatePegRatio(k); // フォワードPER・PEG・フォワードPEG を一括更新
+    updateValueMetrics(k); // FCF Yield / EV/EBITDA / 実績PER
   }
 }
 

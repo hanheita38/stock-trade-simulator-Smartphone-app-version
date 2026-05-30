@@ -465,22 +465,26 @@
         <div class="metric-help" id="desc-buffett-margin">理論値より現在値が低いほど「割安」。+がお得、−が割高。</div>
       </div>
       <!-- フォワードPER -->
-      <div class="metric-box" id="forward-per-box">
-        <span class="metric-label" id="label-forward-per">🔭 フォワードPER</span>
-        <span class="metric-value" id="forward-per-val">--</span>
-        <div class="metric-help" id="desc-forward-per">来期予想EPSをもとにしたPER。実績PERより先行きを重視。</div>
-      </div>
       <!-- PEGレシオ / フォワードPEG -->
-      <div class="metric-box" id="peg-ratio-box">
-        <span class="metric-label" id="label-peg-ratio">📈 PEGレシオ</span>
-        <span class="metric-value" id="peg-ratio-val">--</span>
-        <div class="metric-help" id="desc-peg-ratio">PER ÷ EPS成長率。1以下が割安の目安。</div>
-      </div>
       <!-- フォワードPEG -->
-      <div class="metric-box" id="forward-peg-box">
-        <span class="metric-label" id="label-forward-peg">🚀 フォワードPEG</span>
-        <span class="metric-value" id="forward-peg-val">--</span>
-        <div class="metric-help" id="desc-forward-peg">フォワードPER ÷ EPS成長率。成長期待を加味した来期割安度。</div>
+      <!-- 割安株スクリーニング指標（優先度順） -->
+      <!-- ① FCF利回り / オーナー利益利回り -->
+      <div class="metric-box" id="fcf-yield-box">
+        <span class="metric-label" id="label-fcf-yield">💵 FCF利回り（オーナー利益）</span>
+        <span class="metric-value" id="fcf-yield-val">--</span>
+        <div class="metric-help" id="desc-fcf-yield">FCF ÷ 時価総額。バフェット流「オーナー利益利回り」。8%超が割安の目安。</div>
+      </div>
+      <!-- ② EV/FCF（EV/EBITDAの代替・無料プランで取得可能） -->
+      <div class="metric-box" id="ev-ebitda-box">
+        <span class="metric-label" id="label-ev-ebitda">🏢 EV/FCF（企業価値倍率）</span>
+        <span class="metric-value" id="ev-ebitda-val">--</span>
+        <div class="metric-help" id="desc-ev-ebitda">負債込みの企業価値 ÷ FCF。15倍未満が割安の目安（EV/EBITDAの代替）。</div>
+      </div>
+      <!-- ③ 実績PER -->
+      <div class="metric-box" id="trailing-per-box">
+        <span class="metric-label" id="label-trailing-per">📊 実績PER (TTM)</span>
+        <span class="metric-value" id="trailing-per-val">--</span>
+        <div class="metric-help" id="desc-trailing-per">株価 ÷ TTM EPS。15倍未満が割安の目安（業種依存）。</div>
       </div>
     </div>
     <!-- ダリオ流 暴落テスト トグル -->
