@@ -391,12 +391,6 @@ function applyLang() {
     'label-drawdown'        : 'textContent',
     'desc-sharpe'           : 'textContent',
     'desc-drawdown'         : 'textContent',
-    'label-buffett-theory'  : 'textContent',
-    'label-buffett-margin'  : 'textContent',
-    'desc-buffett-theory'   : 'textContent',
-    'desc-buffett-margin'   : 'textContent',
-    'label-peg-ratio'       : 'textContent',
-    'desc-peg-ratio'        : 'textContent',
     'label-crash-toggle'    : 'textContent',
     'crash-badge-pct'       : 'textContent',
     'crash-result-label'    : 'textContent',
@@ -423,12 +417,6 @@ function applyLang() {
     'label-drawdown'       : t.drawdown,
     'desc-sharpe'          : t.sharpeDesc,
     'desc-drawdown'        : t.drawdownDesc,
-    'label-buffett-theory' : t.buffettTheory,
-    'label-buffett-margin' : t.buffettMargin,
-    'desc-buffett-theory'  : t.buffettTheoryDesc,
-    'desc-buffett-margin'  : t.buffettMarginDesc,
-    'label-peg-ratio'      : t.pegRatio,
-    'desc-peg-ratio'       : t.pegRatioDesc,
     'label-crash-toggle'   : t.crashToggle,
     'crash-badge-pct'      : t.crashBadge,
     'crash-result-label'   : t.crashLabel,
@@ -548,7 +536,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   for (const k of Object.keys(STOCKS)) {
     await fetchLatestPrice(k);
-    fetchBuffettMetrics(k);
+    fetchFinancials(k);
     fetchEarningsHistory(k);
     fetchNextEarningsDate(k);
   }

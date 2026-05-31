@@ -107,8 +107,7 @@ function buildTabs() {
 function switchStock(k) {
   currentStock = k;
   buildTabs();
-  updateBuffettMetrics(k);
-  updatePegRatio(k);
+  updateValueMetrics(k);
   updateCrashTest();
   renderPendingOrders();
   updateEarningsPanel(k);
