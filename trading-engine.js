@@ -147,12 +147,110 @@ function calcMaxDrawdown() {
 }
 
 // ============================================================
-// 財務指標表示（実績PER・フォワードPER・ROE・PBR）
+// バフェット指標（グレアム数・安全域）
 // ============================================================
 
 /**
- * 実績PER・フォワードPER・ROE・PBR を計算してUIに一括反映する
- * 割高/割安判定バッジは表示しない
+ * グレアム数と安全域を計算してUIに反映する
+ * データ未取得の場合は fetchBuffettMetrics() を呼び出す
+ * @param {string} k - 銘柄コード
+ */
+function updateBuffettMetrics(k) {
+  const fin        = stockFinancials[k];
+  const theoryBox  = document.getElementById('buffett-theory-box');
+  const marginBox  = document.getElementById('buffett-margin-box');
+  const theoryValEl= document.getElementById('buffett-theory-val');
+  const marginValEl= document.getElementById('buffett-margin-val');
+
+  // まだデータ取得していない（初回）→ 非同期取得を開始
+  if (!fin) {
+    fetchBuffettMetrics(k);
+    theoryValEl.textContent = '取得中...';
+    marginValEl.textContent = '取得中...';
+    marginBox.className = 'metric-box';
+    return;
+  }
+
+  // 取得中
+  if (fin.loading) {
+    theoryValEl.textContent = '取得中...';
+    marginValEl.textContent = '取得中...';
+    marginBox.className = 'metric-box';
+    return;
+  }
+
+  // エラー or EPS/BPS が取得できなかった or 負数（グレアム数算出不可）
+  if (fin.error || fin.eps === undefined || fin.eps <= 0 || fin.bps === undefined || fin.bps <= 0) {
+    theoryValEl.textContent = I18N[lang].buffettNoData;
+    marginValEl.textContent = I18N[lang].buffettNoData;
+    marginBox.className = 'metric-box';
+    return;
+  }
+
+  // グレアム数を円で算出
+  // 日本株（jpy:true）はEPS/BPSがJPY建て → そのまま計算
+  // 米国株（jpy:false）はEPS/BPSがUSD建て → fxRate で円換算
+  const grahamBase = Math.sqrt(22.5 * fin.eps * fin.bps);
+  const grahamJpy  = fin.jpy ? Math.round(grahamBase) : Math.round(grahamBase * fxRate);
+  theoryValEl.textContent = formatCurrency(grahamJpy);
+
+  // EPS/BPS の出所を補足表示
+  const epsLabel   = fin.jpy ? `¥${fin.eps.toFixed(2)}` : `$${fin.eps.toFixed(2)}`;
+  const bpsLabel   = fin.jpy ? `¥${fin.bps.toFixed(2)}` : `$${fin.bps.toFixed(2)}`;
+  const sourceNote = lang === 'ja'
+    ? `EPS: ${epsLabel} / BPS: ${bpsLabel} (Finnhub最新値)`
+    : `EPS: ${epsLabel} / BPS: ${bpsLabel} (live via Finnhub)`;
+  const theoryHelpEl = document.getElementById('desc-buffett-theory');
+  if (theoryHelpEl) theoryHelpEl.textContent = lang === 'ja'
+    ? `√(22.5 × EPS × BPS) で算出。${sourceNote}`
+    : `Calculated as √(22.5 × EPS × BPS). ${sourceNote}`;
+
+  // 現在価格（prices は常に円建てで格納されている）
+  const data = prices[k];
+  if (!data || data.length === 0) { marginValEl.textContent = '--'; return; }
+  const curJpy = data[data.length - 1];
+
+  // 安全域 = (理論値 - 現在値) / 現在値 × 100
+  const margin = ((grahamJpy - curJpy) / curJpy) * 100;
+  const sign   = margin >= 0 ? '+' : '';
+  marginValEl.textContent = `${sign}${margin.toFixed(1)}%`;
+  marginBox.className = `metric-box ${margin >= 0 ? 'buffett-margin-pos' : 'buffett-margin-neg'}`;
+}
+
+// ============================================================
+// 割安株スクリーニング指標
+// 優先度: ① FCF Yield / オーナー利益利回り  ② EV/FCF  ③ 実績PER
+//
+// Finnhub 無料プランで実際に取れるフィールド（実測確認済み）:
+//   pfcfTTM   = Price / Free Cash Flow per share (TTM)
+//               → FCF Yield(%) = 1 / pfcfTTM * 100
+//   fcfMarginTTM / fcfMargin = FCF / Revenue (%) ← 補足情報
+//   currentEv/freeCashFlowTTM  = EV/FCF（スラッシュ入りキー名）
+//   currentEv/freeCashFlowAnnual も存在するケースあり
+//   peTTM     = 実績PER
+//   marketCapitalization = 時価総額 (millions USD)
+//   psTTM     = Price / Sales
+// ※ evToEbitdaTTM / freeCashFlowTTM 等は無料プランでは返らない
+// ============================================================
+
+/**
+ * 割安バッジ情報を返すユーティリティ
+ * @param {'cheap'|'fair'|'expensive'|'neutral'} level
+ * @returns {{ cls: string, text: string }}
+ */
+function _valueBadge(level) {
+  const isJa = lang === 'ja';
+  const map = {
+    cheap:     { cls: 'val-cheap',     text: isJa ? '割安'   : 'Cheap'     },
+    fair:      { cls: 'val-fair',      text: isJa ? '適正'   : 'Fair'      },
+    expensive: { cls: 'val-expensive', text: isJa ? '割高'   : 'Expensive' },
+    neutral:   { cls: 'val-neutral',   text: isJa ? 'N/A'    : 'N/A'       },
+  };
+  return map[level] || map.neutral;
+}
+
+/**
+ * FCF Yield / EV/FCF / 実績PER を計算してUIに一括反映する
  * @param {string} k - 銘柄コード
  */
 function updateValueMetrics(k) {
@@ -161,12 +259,98 @@ function updateValueMetrics(k) {
   const load = isJa ? '取得中...' : 'Loading...';
   const na   = isJa ? 'データなし' : 'N/A';
 
-  // 未取得なら非同期取得を開始して「取得中」状態で表示
-  if (!fin) {
-    fetchFinancials(k);
-  }
+  // ── ① FCF利回り（フリーキャッシュフロー利回り / オーナー利益利回り） ──
+  // Finnhub が返す pfcfTTM = Price ÷ FCF per share
+  // ∴ FCF Yield(%) = 1 / pfcfTTM * 100
+  (function renderFcfYield() {
+    const box  = document.getElementById('fcf-yield-box');
+    const val  = document.getElementById('fcf-yield-val');
+    const desc = document.getElementById('desc-fcf-yield');
+    const lbl  = document.getElementById('label-fcf-yield');
+    if (!box) return;
+    if (lbl) lbl.textContent = isJa ? '💵 FCF利回り（オーナー利益）' : '💵 FCF Yield (Owner Earnings)';
 
-  // ── ① 実績PER (TTM) ────────────────────────────────────────
+    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
+
+    // pfcfTTM = P/FCF 倍率 → FCF Yield = 1/pfcfTTM * 100
+    const pfcf = fin.pfcfTTM;
+    if (pfcf == null || !isFinite(pfcf) || pfcf === 0) {
+      val.textContent = na; box.className = 'metric-box';
+      if (desc) desc.textContent = isJa
+        ? 'FCFデータが取得できませんでした（日本株・赤字企業・一部銘柄は非対応）'
+        : 'FCF data unavailable (Japanese stocks, loss-making companies, or some tickers)';
+      return;
+    }
+
+    const yieldPct = (1 / pfcf) * 100;
+    const sign     = yieldPct >= 0 ? '' : '−';
+    const absYield = Math.abs(yieldPct);
+
+    // 判定: 8%超→割安 / 4〜8%→適正 / 4%未満 or 負→割高
+    let level;
+    if (yieldPct >= 8)      level = 'cheap';
+    else if (yieldPct >= 4) level = 'fair';
+    else                    level = 'expensive';
+
+    const badge = _valueBadge(level);
+    val.innerHTML = `${sign}${absYield.toFixed(2)}%<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
+
+    // FCFマージンを補足
+    const marginNote = (fin.fcfMargin != null && isFinite(fin.fcfMargin))
+      ? (isJa ? ` / FCFマージン: ${fin.fcfMargin.toFixed(1)}%` : ` / FCF margin: ${fin.fcfMargin.toFixed(1)}%`)
+      : '';
+    const pfcfNote = isJa
+      ? `P/FCF倍率: ${pfcf.toFixed(1)}x${marginNote}`
+      : `P/FCF: ${pfcf.toFixed(1)}x${marginNote}`;
+    const guideline = isJa
+      ? '目安: 8%超→割安 / 4〜8%→適正 / 4%未満→割高。高いほどオーナーに還元される現金が多い。'
+      : 'Guide: >8% cheap / 4–8% fair / <4% expensive. Higher = more cash returned to owners.';
+    if (desc) desc.textContent = `FCF利回り: ${sign}${absYield.toFixed(2)}%（${pfcfNote}）。${guideline}`;
+  })();
+
+  // ── ② EV/FCF（企業価値 ÷ フリーキャッシュフロー）────────
+  // Finnhub フィールド: 'currentEv/freeCashFlowTTM'（スラッシュ入り）
+  // EV/EBITDAは無料プランで取れないため、EV/FCFで代替
+  // EV/FCFはEV/EBITDAより保守的で債務調整済みの割安度を示す
+  (function renderEvFcf() {
+    const box  = document.getElementById('ev-ebitda-box');  // HTMLのIDはそのまま流用
+    const val  = document.getElementById('ev-ebitda-val');
+    const desc = document.getElementById('desc-ev-ebitda');
+    const lbl  = document.getElementById('label-ev-ebitda');
+    if (!box) return;
+    if (lbl) lbl.textContent = isJa ? '🏢 EV/FCF（企業価値倍率）' : '🏢 EV/FCF (Enterprise Value)';
+
+    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
+
+    // 'currentEv/freeCashFlowTTM' はスラッシュを含むキー名
+    const evFcf = fin.evToFcf;
+    if (evFcf == null || !isFinite(evFcf) || evFcf <= 0) {
+      val.textContent = na; box.className = 'metric-box';
+      if (desc) desc.textContent = isJa
+        ? 'EV/FCFデータが取得できませんでした（日本株・赤字企業は非対応）'
+        : 'EV/FCF data unavailable (Japanese stocks, loss-making companies)';
+      return;
+    }
+
+    // 判定: 15倍未満→割安 / 15〜30倍→適正 / 30倍超→割高
+    // ※EV/FCFはEV/EBITDAより数値が大きくなる傾向があるため閾値を調整
+    let level;
+    if (evFcf < 15)       level = 'cheap';
+    else if (evFcf < 30)  level = 'fair';
+    else                  level = 'expensive';
+
+    const badge = _valueBadge(level);
+    val.innerHTML = `${evFcf.toFixed(1)}x<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
+
+    const guideline = isJa
+      ? '目安: 15倍未満→割安 / 15〜30倍→適正 / 30倍超→割高。負債も含めた企業全体のFCF割安度（EV/EBITDAの代替）。'
+      : 'Guide: <15x cheap / 15–30x fair / >30x expensive. Whole-enterprise FCF value incl. debt (proxy for EV/EBITDA).';
+    if (desc) desc.textContent = `EV/FCF: ${evFcf.toFixed(1)}x。${guideline}`;
+  })();
+
+  // ── ③ 実績PER（TTM）────────────────────────────────────────
   (function renderTrailingPer() {
     const box  = document.getElementById('trailing-per-box');
     const val  = document.getElementById('trailing-per-val');
@@ -181,111 +365,25 @@ function updateValueMetrics(k) {
     if (pe == null || !isFinite(pe) || pe <= 0) {
       val.textContent = na; box.className = 'metric-box';
       if (desc) desc.textContent = isJa
-        ? '実績PERのデータが取得できませんでした（赤字銘柄は算出不可）'
-        : 'Trailing P/E unavailable (negative earnings companies have no P/E)';
+        ? 'PERデータが取得できませんでした（赤字銘柄はPER算出不可）'
+        : 'P/E data unavailable (negative earnings companies have no P/E)';
       return;
     }
 
-    val.textContent = `${pe.toFixed(1)}x`;
-    box.className = 'metric-box';
-    if (desc) desc.textContent = isJa
-      ? `株価 ÷ 過去12ヶ月EPS。現在: ${pe.toFixed(1)}倍`
-      : `Price ÷ trailing 12-month EPS. Current: ${pe.toFixed(1)}x`;
-  })();
+    // 判定: 15倍未満→割安 / 15〜25倍→適正 / 25倍超→割高
+    let level;
+    if (pe < 15)      level = 'cheap';
+    else if (pe < 25) level = 'fair';
+    else              level = 'expensive';
 
-  // ── ② フォワードPER ────────────────────────────────────────
-  // /stock/eps-estimate の翌年度 epsAvg から計算（米国株のみ）
-  (function renderForwardPer() {
-    const box  = document.getElementById('forward-per-box');
-    const val  = document.getElementById('forward-per-val');
-    const desc = document.getElementById('desc-forward-per');
-    const lbl  = document.getElementById('label-forward-per');
-    if (!box) return;
-    if (lbl) lbl.textContent = isJa ? '🔭 フォワードPER' : '🔭 Forward P/E';
+    const badge = _valueBadge(level);
+    val.innerHTML = `${pe.toFixed(1)}x<span class="val-badge ${badge.cls}">${badge.text}</span>`;
+    box.className = `metric-box val-${level}`;
 
-    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
-
-    const fpe = fin.forwardPe;
-    if (fpe == null || !isFinite(fpe) || fpe <= 0) {
-      val.textContent = na; box.className = 'metric-box';
-      if (desc) desc.textContent = isJa
-        ? 'データなし（日本株・アナリスト予想なし銘柄は非対応）'
-        : 'N/A (Japanese stocks or tickers without analyst estimates)';
-      return;
-    }
-
-    val.textContent = `${fpe.toFixed(1)}x`;
-    box.className = 'metric-box';
-
-    // 実績PERとの比較
-    let cmp = '';
-    if (fin.pe && isFinite(fin.pe) && fin.pe > 0) {
-      const diff = fpe - fin.pe;
-      cmp = isJa
-        ? `（実績PER比 ${diff >= 0 ? '+' : ''}${diff.toFixed(1)}倍）`
-        : ` (vs trailing: ${diff >= 0 ? '+' : ''}${diff.toFixed(1)}x)`;
-    }
-    if (desc) desc.textContent = isJa
-      ? `株価 ÷ アナリスト翌年度予想EPS。現在: ${fpe.toFixed(1)}倍${cmp}`
-      : `Price ÷ analyst next-year EPS estimate. Current: ${fpe.toFixed(1)}x${cmp}`;
-  })();
-
-  // ── ③ ROE（自己資本利益率）───────────────────────────────
-  (function renderRoe() {
-    const box  = document.getElementById('roe-box');
-    const val  = document.getElementById('roe-val');
-    const desc = document.getElementById('desc-roe');
-    const lbl  = document.getElementById('label-roe');
-    if (!box) return;
-    if (lbl) lbl.textContent = isJa ? '💹 ROE（自己資本利益率）' : '💹 ROE (Return on Equity)';
-
-    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
-
-    const roe = fin.roe;
-    if (roe == null || !isFinite(roe)) {
-      val.textContent = na; box.className = 'metric-box';
-      if (desc) desc.textContent = isJa
-        ? 'ROEのデータが取得できませんでした'
-        : 'ROE data unavailable';
-      return;
-    }
-
-    val.textContent = `${roe.toFixed(1)}%`;
-    box.className = 'metric-box';
-    if (desc) desc.textContent = isJa
-      ? `当期純利益 ÷ 自己資本 × 100。現在: ${roe.toFixed(1)}%`
-      : `Net income ÷ shareholders' equity × 100. Current: ${roe.toFixed(1)}%`;
-  })();
-
-  // ── ④ PBR（株価純資産倍率）──────────────────────────────
-  (function renderPbr() {
-    const box  = document.getElementById('pbr-box');
-    const val  = document.getElementById('pbr-val');
-    const desc = document.getElementById('desc-pbr');
-    const lbl  = document.getElementById('label-pbr');
-    if (!box) return;
-    if (lbl) lbl.textContent = isJa ? '📚 PBR（株価純資産倍率）' : '📚 P/B Ratio';
-
-    if (!fin || fin.loading) { val.textContent = load; box.className = 'metric-box'; return; }
-
-    const pbr = fin.pbr;
-    if (pbr == null || !isFinite(pbr) || pbr <= 0) {
-      val.textContent = na; box.className = 'metric-box';
-      if (desc) desc.textContent = isJa
-        ? 'PBRのデータが取得できませんでした'
-        : 'P/B ratio data unavailable';
-      return;
-    }
-
-    val.textContent = `${pbr.toFixed(2)}x`;
-    box.className = 'metric-box';
-
-    const bpsNote = (fin.bps && isFinite(fin.bps))
-      ? (isJa ? `（BPS: ${fin.jpy ? '¥' : '$'}${fin.bps.toFixed(2)}）` : ` (BPS: ${fin.jpy ? '¥' : '$'}${fin.bps.toFixed(2)})`)
-      : '';
-    if (desc) desc.textContent = isJa
-      ? `株価 ÷ 1株純資産。現在: ${pbr.toFixed(2)}倍${bpsNote}`
-      : `Price ÷ book value per share. Current: ${pbr.toFixed(2)}x${bpsNote}`;
+    const guideline = isJa
+      ? '目安: 15倍未満→割安 / 15〜25倍→適正 / 25倍超→割高。業種・成長フェーズにより大きく異なる。'
+      : 'Guide: <15x cheap / 15–25x fair / >25x expensive. Varies widely by sector and growth stage.';
+    if (desc) desc.textContent = `実績PER: ${pe.toFixed(1)}x。${guideline}`;
   })();
 }
 
@@ -330,7 +428,8 @@ function updateRiskMetrics() {
   const drawdown = calcMaxDrawdown();
   document.getElementById('sharpe-ratio').textContent  = sharpe   === null ? '--' : sharpe.toFixed(2);
   document.getElementById('max-drawdown').textContent  = drawdown === null ? '--' : `${(drawdown * 100).toFixed(2)}%`;
-  updateValueMetrics(currentStock);
+  updateBuffettMetrics(currentStock);
+  updatePegRatio(currentStock);
   updateCrashTest();
 }
 
