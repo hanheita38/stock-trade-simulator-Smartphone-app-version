@@ -132,24 +132,6 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 .crash-result-value { font-size: 20px; font-weight: bold; color: #c2410c; }
 .crash-result-sub { font-size: 11px; color: #b45309; margin-top: 2px; }
 
-/* バフェット流 安全域 */
-.metric-box.buffett-margin-pos .metric-value { color: #22c55e; }
-.metric-box.buffett-margin-neg .metric-value { color: #ef4444; }
-
-/* 割安スクリーニング指標（FCF Yield / EV/EBITDA / 実績PER）*/
-.metric-box.val-cheap     .metric-value { color: #22c55e; }
-.metric-box.val-fair      .metric-value { color: #f59e0b; }
-.metric-box.val-expensive .metric-value { color: #ef4444; }
-
-.val-badge {
-  display: inline-block; font-size: 10px; font-weight: bold;
-  padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
-}
-.val-badge.val-cheap     { background: #dcfce7; color: #166534; }
-.val-badge.val-fair      { background: #fef3c7; color: #92400e; }
-.val-badge.val-expensive { background: #fee2e2; color: #991b1b; }
-.val-badge.val-neutral   { background: #f1f5f9; color: #64748b; }
-
 /* 資産推移グラフパネル */
 .asset-history-panel {
   background: #f8f9fa; border: 1px solid #eee; border-radius: 12px;
