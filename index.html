@@ -453,30 +453,34 @@
         <span class="metric-value" id="max-drawdown">--</span>
         <div class="metric-help" id="desc-drawdown">資産が最大で何％減ったか。</div>
       </div>
-      <!-- 財務指標 -->
-      <!-- ① 実績PER -->
-      <div class="metric-box" id="trailing-per-box">
-        <span class="metric-label" id="label-trailing-per">📊 実績PER (TTM)</span>
-        <span class="metric-value" id="trailing-per-val">--</span>
-        <div class="metric-help" id="desc-trailing-per">株価 ÷ TTM EPS。過去12ヶ月の実績利益に基づく株価倍率。</div>
+      <!-- バフェット流 -->
+      <div class="metric-box" id="buffett-theory-box">
+        <span class="metric-label" id="label-buffett-theory">📐 理論値（グレアム数）</span>
+        <span class="metric-value" id="buffett-theory-val">--</span>
+        <div class="metric-help" id="desc-buffett-theory">√(22.5 × EPS × BPS) で算出。バフェット流の本質的価値。</div>
       </div>
-      <!-- ② フォワードPER -->
+      <div class="metric-box" id="buffett-margin-box">
+        <span class="metric-label" id="label-buffett-margin">🛡️ 安全域（バフェット）</span>
+        <span class="metric-value" id="buffett-margin-val">--</span>
+        <div class="metric-help" id="desc-buffett-margin">理論値より現在値が低いほど「割安」。+がお得、−が割高。</div>
+      </div>
+      <!-- フォワードPER -->
       <div class="metric-box" id="forward-per-box">
         <span class="metric-label" id="label-forward-per">🔭 フォワードPER</span>
         <span class="metric-value" id="forward-per-val">--</span>
-        <div class="metric-help" id="desc-forward-per">株価 ÷ アナリスト予想EPS（翌年度）。将来利益に基づく株価倍率。米国株のみ対応。</div>
+        <div class="metric-help" id="desc-forward-per">来期予想EPSをもとにしたPER。実績PERより先行きを重視。</div>
       </div>
-      <!-- ③ ROE -->
-      <div class="metric-box" id="roe-box">
-        <span class="metric-label" id="label-roe">💹 ROE（自己資本利益率）</span>
-        <span class="metric-value" id="roe-val">--</span>
-        <div class="metric-help" id="desc-roe">当期純利益 ÷ 自己資本 × 100。企業が株主資本をどれだけ効率的に運用しているかを示す。</div>
+      <!-- PEGレシオ / フォワードPEG -->
+      <div class="metric-box" id="peg-ratio-box">
+        <span class="metric-label" id="label-peg-ratio">📈 PEGレシオ</span>
+        <span class="metric-value" id="peg-ratio-val">--</span>
+        <div class="metric-help" id="desc-peg-ratio">PER ÷ EPS成長率。1以下が割安の目安。</div>
       </div>
-      <!-- ④ PBR -->
-      <div class="metric-box" id="pbr-box">
-        <span class="metric-label" id="label-pbr">📚 PBR（株価純資産倍率）</span>
-        <span class="metric-value" id="pbr-val">--</span>
-        <div class="metric-help" id="desc-pbr">株価 ÷ 1株純資産（BPS）。1倍割れは帳簿上の解散価値以下で取引されている状態。</div>
+      <!-- フォワードPEG -->
+      <div class="metric-box" id="forward-peg-box">
+        <span class="metric-label" id="label-forward-peg">🚀 フォワードPEG</span>
+        <span class="metric-value" id="forward-peg-val">--</span>
+        <div class="metric-help" id="desc-forward-peg">フォワードPER ÷ EPS成長率。成長期待を加味した来期割安度。</div>
       </div>
     </div>
     <!-- ダリオ流 暴落テスト トグル -->

@@ -122,76 +122,48 @@ async function fetchLatestPrice(k) {
  * すでにデータ取得中 or 取得済みの場合はスキップ
  * @param {string} k - 銘柄コード
  */
-async function fetchFinancials(k) {
+async function fetchBuffettMetrics(k) {
   if (!getFinnhubApiKey()) return;
   if (stockFinancials[k] && (stockFinancials[k].loading || stockFinancials[k].eps !== undefined)) return;
 
   stockFinancials[k] = { loading: true };
   // バフェット指標取得中を即時表示
-  document.getElementById('trailing-per-val') && (document.getElementById('trailing-per-val').textContent = '取得中...');
+  document.getElementById('buffett-theory-val').textContent = '取得中...';
+  document.getElementById('buffett-margin-val').textContent = '取得中...';
 
   try {
     const res  = await fetch(buildFinnhubUrl('stock/metric', { symbol: k, metric: 'all' }));
     const data = await res.json();
     const m    = data.metric || {};
 
-    // ── 実績PER ───────────────────────────────────────────────
-    const pe = m.peTTM ?? m.peNormalizedAnnual ?? null;
-
-
-    // ── ROE（自己資本利益率）──────────────────────────────────
-    // Finnhub: roeTTM = Return on Equity (%)
-    const roe = m.roeTTM ?? m.roeAnnual ?? null;
-
-    // ── PBR（株価純資産倍率）──────────────────────────────────
-    // Finnhub: pbAnnual または priceToBookTTM
-    const pbr = m.pbAnnual ?? m.priceToBookTTM ?? null;
-
-    // BPS（PBR表示の補足用）
-    const bps = m.bookValuePerShareQuarterly ?? m.bookValuePerShareAnnual ?? null;
-
+    // EPS: epsBasicExclExtraTTM (TTM基本EPS) → なければ epsNormalizedAnnual
     const eps = m.epsBasicExclExtraTTM ?? m.epsNormalizedAnnual ?? null;
+    // BPS: bookValuePerShareQuarterly → なければ bookValuePerShareAnnual
+    const bps = m.bookValuePerShareQuarterly ?? m.bookValuePerShareAnnual ?? null;
+    // 実績PER: peTTM (TTMベース) → なければ peNormalizedAnnual
+    const pe  = m.peTTM ?? m.peNormalizedAnnual ?? null;
+    // フォワードPER: 来期予想EPSベースのPER（無料プランでも取得可能なケースが多い）
+    const forwardPe = m.forwardPE ?? null;
+    // EPS成長率（複数フィールドを優先順でフォールバック）
+    // epsTTMToTTMGrowth: 直近TTM vs 前年TTM比（最も取れやすい） → 5年・3年成長率
+    const epsGrowth = m['5YearEPSGrowth'] ?? m['3YearEPSGrowth'] ?? m.epsTTMToTTMGrowth ?? null;
+    // 売上成長率（EPS成長率が取れない場合の代替指標）
+    const revenueGrowth = m.revenueGrowthTTMYoy ?? m['5YearRevenueGrowth'] ?? null;
     const isJp = isJpStock(k);
 
-    // ── フォワードPER（/stock/eps-estimate から計算）────────
-    // stock/metric にはフォワードPERフィールドが存在しないため
-    // /stock/eps-estimate?freq=annual の翌年度 epsAvg を取得し
-    // 現在株価 ÷ epsAvg で算出する（米国株のみ対応）
-    let forwardPe = null;
-    if (!isJp) {
-      try {
-        const epsRes  = await fetch(buildFinnhubUrl('stock/eps-estimate', { symbol: k, freq: 'annual' }));
-        const epsData = await epsRes.json();
-        const estimates = epsData?.data;
-        if (Array.isArray(estimates) && estimates.length > 0) {
-          // 今年度以降で最も近い期のコンセンサス予想EPSを採用
-          const today = new Date().toISOString().slice(0, 10);
-          const future = estimates
-            .filter(e => e.period >= today && e.epsAvg != null && e.epsAvg > 0)
-            .sort((a, b) => a.period.localeCompare(b.period));
-          const target = future[0] ?? estimates[estimates.length - 1];
-          if (target?.epsAvg > 0) {
-            const curPrice = prices[k]?.[prices[k].length - 1];
-            // prices は円建てなので米国株は fxRate で逆換算してUSD株価を得る
-            const priceUsd = curPrice && fxRate > 0 ? curPrice / fxRate : null;
-            if (priceUsd) forwardPe = priceUsd / target.epsAvg;
-          }
-        }
-      } catch (_) { /* フォワードPER取得失敗は無視 */ }
+    if (eps !== null && bps !== null) {
+      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, jpy: isJp, loading: false };
+    } else {
+      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, loading: false, error: 'NO_DATA' };
     }
-
-    stockFinancials[k] = {
-      eps, bps, pe, forwardPe, roe, pbr,
-      jpy: isJp, loading: false,
-    };
-
   } catch (e) {
     stockFinancials[k] = { loading: false, error: 'FETCH_ERROR' };
   }
 
   // 取得完了後に現在の銘柄なら即描画
   if (k === currentStock) {
-    updateValueMetrics(k);
+    updateBuffettMetrics(k);
+    updatePegRatio(k); // フォワードPER・PEG・フォワードPEG を一括更新
   }
 }
 
@@ -262,7 +234,7 @@ async function searchAndAddStock() {
         li.onclick = async () => {
           STOCKS[item.symbol] = { name: item.description, color: `hsl(${Math.random() * 360}, 70%, 50%)` };
           await fetchLatestPrice(item.symbol);
-          fetchFinancials(item.symbol);
+          fetchBuffettMetrics(item.symbol);
           fetchEarningsHistory(item.symbol);
           fetchNextEarningsDate(item.symbol);
           currentStock = item.symbol;
@@ -300,7 +272,7 @@ async function saveFinnhubApiKey() {
 
   for (const k of Object.keys(STOCKS)) {
     await fetchLatestPrice(k);
-    fetchFinancials(k);
+    fetchBuffettMetrics(k);
     fetchEarningsHistory(k);
     fetchNextEarningsDate(k);
   }
@@ -332,7 +304,7 @@ setInterval(async () => {
     await fetchLatestPrice(k);
     // 財務データ未取得の銘柄があれば取得（ページ再読み込み後の対応）
     if (!stockFinancials[k] || stockFinancials[k].error) {
-      fetchFinancials(k);
+      fetchBuffettMetrics(k);
     }
   }
   checkMarginCall(); // ロスカット自動執行（updateUI の直前）
