@@ -742,7 +742,7 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 .pl-hero.profit { animation: pl-pulse-profit 2.5s ease infinite; }
 .pl-hero.loss   { animation: pl-pulse-loss   2.5s ease infinite; }
 
-/* TipRanksボタンのデザイン */
+/* 外部リンクボタンの基本デザイン */
 .external-link-btn {
   display: inline-flex;
   align-items: center;
@@ -973,7 +973,19 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 .eps-legend-miss { color: #dc2626; font-weight: bold; }
 .eps-legend-note { color: #94a3b8; }
 
-/* Macrotrends リンクボタン（TipRanksと差別化） */
+/* TradingView リンクボタン（ブランドカラーで差別化） */
+.tradingview-btn {
+  background-color: #eef4ff;
+  color: #1652f0;
+  border-color: #c7d8ff;
+}
+.tradingview-btn:hover {
+  background-color: #1652f0;
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Macrotrends リンクボタン（TradingViewと差別化） */
 .macrotrends-btn {
   background-color: #f0fdf4;
   color: #15803d;

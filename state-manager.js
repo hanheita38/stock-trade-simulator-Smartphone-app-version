@@ -67,6 +67,10 @@ const earningsData = {};
 // { [symbol]: { date, epsEstimate, revenueEstimate } | null }
 const nextEarnings = {};
 
+// ── TradingView「予想」ページ用 取引所スラッグキャッシュ ──
+// { [symbol]: 'loading' | 'EXCHANGE-SYMBOL' | null(取得失敗) } ※未登録キーは未取得
+const tvSlugCache = {};
+
 // ── ポートフォリオ状態 ──
 let cash         = parseFloat(localStorage.getItem(LS.CASH)) || 1_000_000;
 let holdings     = safeParse(LS.HOLDINGS,      {});
@@ -499,7 +503,7 @@ function applyLang() {
   }
 
   // 外部リンクラベル（言語切替時に再描画）
-  updateTipRanksLink(currentStock);
+  updateTradingViewForecastLink(currentStock);
   updateMacrotrendsLink(currentStock);
 }
 

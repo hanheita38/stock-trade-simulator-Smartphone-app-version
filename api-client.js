@@ -396,3 +396,58 @@ async function fetchNextEarningsDate(k) {
 
   if (k === currentStock) updateEarningsPanel(k);
 }
+
+// ============================================================
+// TradingView「予想」ページ 取引所判定（symbol_search API）
+// ============================================================
+
+/**
+ * TradingViewの検索結果に含まれるハイライト用タグ（<em>等）を除去する
+ * @param {string} s
+ * @returns {string}
+ */
+function stripTvHighlightTags(s) {
+  return (s || '').replace(/<[^>]+>/g, '');
+}
+
+/**
+ * TradingViewの「EXCHANGE-SYMBOL」形式スラッグを symbol_search API で判定し
+ * tvSlugCache[k] に格納する（既取得・取得中の場合はスキップ）
+ * APIが失敗した場合は null を格納し、UI側でフォールバックURLを使用させる
+ * @param {string} k - 銘柄コード（日本株は '7203.T' 形式）
+ */
+async function fetchTradingViewSlug(k) {
+  if (tvSlugCache[k] !== undefined) return;
+  tvSlugCache[k] = 'loading';
+
+  const isJp      = isJpStock(k);
+  const queryText = isJp ? k.replace(/\.T$/, '') : k;
+  // 日本株はTSE、米国株は主要3取引所を優先順に判定
+  const preferredExchanges = isJp ? ['TSE'] : ['NASDAQ', 'NYSE', 'AMEX'];
+
+  try {
+    const url = `https://symbol-search.tradingview.com/symbol_search/?text=${encodeURIComponent(queryText)}&type=stock&lang=en`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    const candidates = (Array.isArray(data) ? data : [])
+      .map(item => ({
+        symbol  : stripTvHighlightTags(item.symbol).toUpperCase(),
+        exchange: (item.exchange || '').toUpperCase(),
+      }))
+      .filter(item => item.symbol === queryText.toUpperCase());
+
+    let match = null;
+    for (const ex of preferredExchanges) {
+      match = candidates.find(item => item.exchange === ex);
+      if (match) break;
+    }
+    if (!match) match = candidates[0] || null; // 優先取引所以外でも銘柄コード一致があれば採用
+
+    tvSlugCache[k] = match ? `${match.exchange}-${match.symbol}` : null;
+  } catch (e) {
+    tvSlugCache[k] = null; // CORS制限・通信失敗時 → UI側のフォールバックURLに委ねる
+  }
+
+  if (k === currentStock) updateTradingViewForecastLink(k);
+}

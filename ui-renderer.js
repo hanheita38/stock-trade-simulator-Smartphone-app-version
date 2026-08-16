@@ -112,6 +112,7 @@ function switchStock(k) {
   updateCrashTest();
   renderPendingOrders();
   updateEarningsPanel(k);
+  updateTradingViewForecastLink(k);
   updateMacrotrendsLink(k);
   if (!earningsData[k]) { fetchEarningsHistory(k); fetchNextEarningsDate(k); }
   updateUI();
@@ -136,7 +137,10 @@ function deleteStock(k, event) {
   delete prices[k];
   delete stockFinancials[k];
   if (currentStock === k) currentStock = Object.keys(STOCKS)[0] || '';
-  saveData(); buildTabs(); updateUI();
+  saveData(); buildTabs();
+  updateTradingViewForecastLink(currentStock);
+  updateMacrotrendsLink(currentStock);
+  updateUI();
 }
 
 // ============================================================
@@ -273,7 +277,7 @@ function updateUI() {
   pszAutoFillEntry();
   drawAssetHistoryChart();
   updateEarningsPanel(currentStock);
-  updateTipRanksLink(currentStock);
+  updateTradingViewForecastLink(currentStock);
   updateMacrotrendsLink(currentStock);
 }
 
@@ -1210,21 +1214,29 @@ function updateEarningsPanel(k) {
 }
 
 /**
- * TipRanksへのディープリンクを更新する（アナリスト分析ページへ）
+ * TradingViewの「予想」ページ（アナリスト目標株価）へのディープリンクを更新する
+ * TradingViewのURLは「取引所コード-銘柄コード」形式（例: NASDAQ-MSFT）が必要なため、
+ * symbol_search APIで取引所を動的に判定する（api-client.js の fetchTradingViewSlug）。
+ * 取引所が未判明の間は米国株=NASDAQ／日本株=TSEを仮定したURLを暫定表示し、
+ * 判定完了後に正しいURLへ差し替える。
  * @param {string} symbol - 銘柄コード
  */
-function updateTipRanksLink(symbol) {
-  const linkEl = document.getElementById('tipranks-link');
-  if (!linkEl) return;
+function updateTradingViewForecastLink(symbol) {
+  const linkEl = document.getElementById('tradingview-forecast-link');
+  if (!linkEl || !symbol) return;
 
-  // 米国株のみ対応（日本株 .T はTipRanksに存在しないため）
-  if (isJpStock(symbol)) {
-    linkEl.style.display = 'none';
-  } else {
-    linkEl.style.display = 'inline-flex';
-    linkEl.href = `https://www.tipranks.com/stocks/${symbol}/forecast`;
-    linkEl.querySelector('span').textContent = lang === 'ja' ? 'TipRanksで分析を見る' : 'Analyst ratings on TipRanks';
-  }
+  // 未取得なら裏で取引所を検索開始（完了後に自動で本関数が再呼び出しされる）
+  if (tvSlugCache[symbol] === undefined) fetchTradingViewSlug(symbol);
+
+  const cached = tvSlugCache[symbol];
+  const isJp   = isJpStock(symbol);
+  // 取引所判定中 / 判定失敗時のフォールバック（米国株はNASDAQ、日本株はTSEを仮定）
+  const fallbackSlug = isJp ? `TSE-${symbol.replace(/\.T$/, '')}` : `NASDAQ-${symbol}`;
+  const slug = (cached && cached !== 'loading') ? cached : fallbackSlug;
+
+  linkEl.href = `https://jp.tradingview.com/symbols/${slug}/forecast-price-target/`;
+  linkEl.style.display = 'inline-flex';
+  linkEl.querySelector('span').textContent = lang === 'ja' ? 'TradingViewで予想を見る' : 'Price forecast on TradingView';
 }
 
 /**

@@ -4,7 +4,7 @@
 //                Network First（API通信はキャッシュしない）
 // ============================================================
 
-const CACHE_NAME = 'kabu-sim-v1';
+const CACHE_NAME = 'kabu-sim-v2'; // ← バージョンを上げてキャッシュを強制更新（TradingViewリンク対応）
 
 // キャッシュ対象の静的ファイル
 const STATIC_ASSETS = [
