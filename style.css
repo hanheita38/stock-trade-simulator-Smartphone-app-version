@@ -1012,7 +1012,7 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 
   /* ─── アプリ全体 ─── */
   #app {
-    padding: 14px 12px;
+    padding: 10px 10px;
     max-width: 100%;
   }
 
@@ -1024,7 +1024,7 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     padding-bottom: 10px;
   }
   #app-title {
-    font-size: 17px;
+    font-size: 18px;
     flex: 1 1 100%;  /* 1行目に銘柄名 */
   }
   .header-right {
@@ -1033,12 +1033,12 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     gap: 8px;
   }
   .cash-badge {
-    font-size: 14px;
-    padding: 7px 12px;
+    font-size: 15px;
+    padding: 8px 14px;
   }
   .btn-reset, .btn-lang {
-    padding: 7px 10px;
-    font-size: 12px;
+    padding: 8px 12px;
+    font-size: 13px;
   }
 
   /* ─── 検索エリア ─── */
@@ -1067,15 +1067,15 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 
   /* ─── 価格表示 ─── */
   .price-display {
-    font-size: 34px;
+    font-size: 40px;
     flex-wrap: wrap;
     gap: 8px;
   }
   .sub-price {
-    font-size: 19px;
+    font-size: 21px;
   }
   .price-change {
-    font-size: 16px;
+    font-size: 17px;
   }
 
   /* ─── チャート ─── */
@@ -1271,14 +1271,16 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     gap: 6px;
   }
   .tab {
-    font-size: 14px;
-    padding: 9px 12px;
+    font-size: 15px;
+    padding: 10px 14px;
   }
 
-  /* ─── 外部リンクボタン ─── */
+  /* ─── 外部リンクボタン（横並び2列で幅いっぱいに広げる）─── */
   .external-link-btn {
-    font-size: 13px;
-    padding: 7px 11px;
+    font-size: 14px;
+    padding: 10px 12px;
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   /* ─── 決算カレンダー＋EPSサプライズ パネル ─── */
