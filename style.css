@@ -1005,9 +1005,14 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
 
 @media (max-width: 480px) {
 
+  /* 文字サイズ全体を底上げするベースライン（em/rem未使用の細かいテキストにも効くよう主要クラスを個別に上書き）*/
+  body {
+    font-size: 15px;
+  }
+
   /* ─── アプリ全体 ─── */
   #app {
-    padding: 12px 10px;
+    padding: 14px 12px;
     max-width: 100%;
   }
 
@@ -1015,25 +1020,25 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   .header {
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 14px;
-    padding-bottom: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
   }
   #app-title {
-    font-size: 13px;
+    font-size: 17px;
     flex: 1 1 100%;  /* 1行目に銘柄名 */
   }
   .header-right {
     flex: 1 1 100%;
     justify-content: flex-end;
-    gap: 6px;
+    gap: 8px;
   }
   .cash-badge {
-    font-size: 12px;
-    padding: 6px 10px;
+    font-size: 14px;
+    padding: 7px 12px;
   }
   .btn-reset, .btn-lang {
-    padding: 5px 8px;
-    font-size: 11px;
+    padding: 7px 10px;
+    font-size: 12px;
   }
 
   /* ─── 検索エリア ─── */
@@ -1046,34 +1051,45 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   }
   .btn-api-save, .btn-api-delete {
     flex: 1;
-    padding: 8px 0;
+    padding: 10px 0;
+    font-size: 13px;
   }
+  .api-key-title { font-size: 13px; }
+  .api-key-status { font-size: 12px; }
+  .api-key-explain,
+  .api-key-help,
+  .api-key-note { font-size: 12px; }
+  #stock-search { font-size: 16px; }
+  #searchResultList li { font-size: 15px; padding: 13px; }
+
+  /* ─── 市場ステータス・為替 ─── */
+  .sync-status { font-size: 12px; }
 
   /* ─── 価格表示 ─── */
   .price-display {
-    font-size: 26px;
+    font-size: 34px;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
   }
   .sub-price {
-    font-size: 15px;
+    font-size: 19px;
   }
   .price-change {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   /* ─── チャート ─── */
   canvas {
-    height: 180px;
+    height: 200px;
   }
   #asset-history-canvas {
-    height: 150px;
+    height: 170px;
   }
 
   /* ─── ポジション情報 ─── */
   .position-info {
-    padding: 10px 8px;
-    gap: 4px;
+    padding: 12px 10px;
+    gap: 6px;
     flex-wrap: wrap;
   }
   .position-info > div {
@@ -1081,13 +1097,16 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     min-width: 90px;
   }
   .info-value {
-    font-size: 12px;
+    font-size: 14px;
+  }
+  .info-label {
+    font-size: 11px;
   }
 
   /* ─── 注文タイプタブ ─── */
   .order-type-tab {
-    font-size: 11px;
-    padding: 8px 2px;
+    font-size: 13px;
+    padding: 10px 4px;
   }
 
   /* ─── トレードパネル（買い/売り 2カラム） ─── */
@@ -1096,11 +1115,11 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     gap: 8px;
   }
   .trade-card {
-    padding: 10px 8px;
+    padding: 12px 10px;
   }
   .btn-buy, .btn-sell {
-    padding: 12px 6px;
-    font-size: 13px;
+    padding: 14px 6px;
+    font-size: 15px;
   }
 
   /* ─── OCOパネル ─── */
@@ -1115,8 +1134,8 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   }
   .psz-method-tab {
     flex: 1 1 45%;
-    font-size: 10px;
-    padding: 7px 4px;
+    font-size: 12px;
+    padding: 9px 4px;
   }
   .psz-inputs {
     grid-template-columns: 1fr;
@@ -1128,7 +1147,7 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     grid-template-columns: 1fr 1fr;
   }
   .psz-result-value {
-    font-size: 28px;
+    font-size: 32px;
   }
 
   /* ─── RRビジュアルパネル ─── */
@@ -1140,7 +1159,7 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     width: 100%;
     flex-direction: row;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
   .rr-stats-row {
     grid-template-columns: 1fr 1fr;
@@ -1158,12 +1177,12 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     -webkit-overflow-scrolling: touch;
   }
   .holdings-table {
-    min-width: 380px;
-    font-size: 11px;
+    min-width: 420px;
+    font-size: 13px;
   }
   .holdings-table th,
   .holdings-table td {
-    padding: 6px 5px;
+    padding: 8px 6px;
   }
 
   /* ─── 資産推移パネル ─── */
@@ -1171,14 +1190,14 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     gap: 6px;
   }
   .ah-stat {
-    min-width: 70px;
-    padding: 6px 6px;
+    min-width: 76px;
+    padding: 7px 7px;
   }
   .ah-stat-label {
-    font-size: 9px;
+    font-size: 10px;
   }
   .ah-stat-value {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   /* ─── 分散分析 ─── */
@@ -1197,7 +1216,8 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     -webkit-overflow-scrolling: touch;
   }
   .corr-table {
-    min-width: 280px;
+    min-width: 300px;
+    font-size: 12px;
   }
 
   /* ─── 信用取引パネル ─── */
@@ -1206,18 +1226,18 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   }
   .margin-trade-tab {
     flex: 1 1 48%;
-    font-size: 11px;
-    padding: 9px 4px;
+    font-size: 12px;
+    padding: 10px 4px;
     text-align: center;
   }
   .margin-summary {
     grid-template-columns: 1fr 1fr 1fr;
   }
   .margin-stat-label {
-    font-size: 9px;
+    font-size: 10px;
   }
   .margin-stat-value {
-    font-size: 12px;
+    font-size: 14px;
   }
   .margin-form-row {
     grid-template-columns: 1fr;
@@ -1231,19 +1251,19 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   }
   .pl-summary-cell {
     flex: 1 1 30%;
-    padding: 8px 6px;
+    padding: 9px 6px;
   }
   .pl-summary-label {
-    font-size: 9px;
+    font-size: 10px;
   }
   .pl-summary-value {
-    font-size: 13px;
+    font-size: 15px;
   }
   .pl-hero-value {
-    font-size: 28px;
+    font-size: 34px;
   }
   .pl-row-right {
-    min-width: 76px;
+    min-width: 80px;
   }
 
   /* ─── タブ（銘柄） ─── */
@@ -1251,21 +1271,38 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
     gap: 6px;
   }
   .tab {
-    font-size: 12px;
-    padding: 7px 10px;
+    font-size: 14px;
+    padding: 9px 12px;
   }
 
   /* ─── 外部リンクボタン ─── */
   .external-link-btn {
-    font-size: 11px;
-    padding: 5px 9px;
+    font-size: 13px;
+    padding: 7px 11px;
   }
+
+  /* ─── 決算カレンダー＋EPSサプライズ パネル ─── */
+  .earnings-panel-title { font-size: 14px; }
+  .earnings-section-title { font-size: 12px; }
+  .earnings-next-row { font-size: 14px; }
+  .earnings-date-badge { font-size: 14px; }
+  .earnings-days-left { font-size: 13px; }
+  .earnings-est { font-size: 13px; }
+  .eps-beat-rate { font-size: 13px; }
+  .eps-surprise-pct { font-size: 10px; }
+  .eps-bar-period { font-size: 9px; }
+  .eps-bar-actual { font-size: 10px; }
+  .eps-legend { font-size: 11px; }
+
+  /* ─── 注文一覧バッジ ─── */
+  .order-badge { font-size: 11px; }
+  .order-detail { font-size: 13px; }
 
   /* ─── タッチターゲット全般（44px以上を確保） ─── */
   .btn-buy, .btn-sell, .btn-oco,
   .btn-short, .btn-margin-buy, .btn-cover, .btn-close-long,
   .btn-psz-apply, .btn-search {
-    min-height: 44px;
+    min-height: 46px;
   }
   button, input, select {
     -webkit-tap-highlight-color: transparent;
@@ -1288,8 +1325,8 @@ input[type="number"] { width: 100%; padding: 8px; margin: 10px 0; border-radius:
   /* ─── トースト通知位置 ─── */
   .order-triggered-toast {
     bottom: 16px;
-    font-size: 12px;
-    padding: 8px 16px;
+    font-size: 14px;
+    padding: 10px 18px;
     width: 90vw;
     max-width: 90vw;
   }
