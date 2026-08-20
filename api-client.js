@@ -59,6 +59,23 @@ async function refreshFxRate() {
   }
 }
 
+/**
+ * Finnhub APIレスポンスがエラー（無効なキー・レート制限超過など）かどうかを判定する
+ * 通常の「該当データなし」（空配列・0値）とは区別し、原因をUIに表示できるようにする
+ * @param {Response} res  - fetch のレスポンスオブジェクト
+ * @param {any} data       - res.json() でパース済みのボディ
+ * @returns {string|null}  - エラーメッセージ（正常時は null）
+ */
+function getFinnhubErrorMessage(res, data) {
+  if (data && typeof data === 'object' && typeof data.error === 'string') {
+    return data.error; // 例: "Invalid API key", "API limit reached please try again later"
+  }
+  if (res.status === 401 || res.status === 403) return 'Invalid API key (401/403)';
+  if (res.status === 429) return 'API rate limit exceeded (429)';
+  if (!res.ok) return `HTTP ${res.status}`;
+  return null;
+}
+
 // ============================================================
 // 株価取得（Finnhub /quote）
 // ============================================================
@@ -81,6 +98,16 @@ async function fetchLatestPrice(k) {
   try {
     const res  = await fetch(buildFinnhubUrl('quote', { symbol: k }));
     const data = await res.json();
+
+    // APIキー無効・レート制限超過などの明示的エラーを先に検出
+    const apiErr = getFinnhubErrorMessage(res, data);
+    if (apiErr) {
+      if (!prices[k]) prices[k] = [];
+      STOCKS[k]._fetchError    = 'API_ERROR';
+      STOCKS[k]._fetchErrorMsg = apiErr;
+      if (k === currentStock) updateUI();
+      return false;
+    }
 
     if (data.c && data.c !== 0) {
       // 価格取得成功
@@ -218,6 +245,13 @@ async function searchAndAddStock() {
     const response = await fetch(buildFinnhubUrl('search', { q: searchQuery }));
     const data     = await response.json();
     resList.innerHTML = '';
+
+    // APIキー無効・レート制限超過などの明示的エラーを先に検出
+    const apiErr = getFinnhubErrorMessage(response, data);
+    if (apiErr) {
+      resList.innerHTML = `<li>⚠️ Finnhub API: ${apiErr}</li>`;
+      return;
+    }
 
     if (data.result && data.result.length > 0) {
       // 日本語検索の場合は .T 銘柄を優先的に上に出す
