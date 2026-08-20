@@ -109,6 +109,7 @@ function switchStock(k) {
   buildTabs();
   updateBuffettMetrics(k);
   updatePegRatio(k);
+  updateGrowthRoeMetrics(k);
   updateCrashTest();
   renderPendingOrders();
   updateEarningsPanel(k);
