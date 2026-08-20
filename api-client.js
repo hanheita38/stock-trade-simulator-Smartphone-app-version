@@ -59,23 +59,6 @@ async function refreshFxRate() {
   }
 }
 
-/**
- * Finnhub APIレスポンスがエラー（無効なキー・レート制限超過など）かどうかを判定する
- * 通常の「該当データなし」（空配列・0値）とは区別し、原因をUIに表示できるようにする
- * @param {Response} res  - fetch のレスポンスオブジェクト
- * @param {any} data       - res.json() でパース済みのボディ
- * @returns {string|null}  - エラーメッセージ（正常時は null）
- */
-function getFinnhubErrorMessage(res, data) {
-  if (data && typeof data === 'object' && typeof data.error === 'string') {
-    return data.error; // 例: "Invalid API key", "API limit reached please try again later"
-  }
-  if (res.status === 401 || res.status === 403) return 'Invalid API key (401/403)';
-  if (res.status === 429) return 'API rate limit exceeded (429)';
-  if (!res.ok) return `HTTP ${res.status}`;
-  return null;
-}
-
 // ============================================================
 // 株価取得（Finnhub /quote）
 // ============================================================
@@ -98,16 +81,6 @@ async function fetchLatestPrice(k) {
   try {
     const res  = await fetch(buildFinnhubUrl('quote', { symbol: k }));
     const data = await res.json();
-
-    // APIキー無効・レート制限超過などの明示的エラーを先に検出
-    const apiErr = getFinnhubErrorMessage(res, data);
-    if (apiErr) {
-      if (!prices[k]) prices[k] = [];
-      STOCKS[k]._fetchError    = 'API_ERROR';
-      STOCKS[k]._fetchErrorMsg = apiErr;
-      if (k === currentStock) updateUI();
-      return false;
-    }
 
     if (data.c && data.c !== 0) {
       // 価格取得成功
@@ -176,14 +149,12 @@ async function fetchBuffettMetrics(k) {
     const epsGrowth = m['5YearEPSGrowth'] ?? m['3YearEPSGrowth'] ?? m.epsTTMToTTMGrowth ?? null;
     // 売上成長率（EPS成長率が取れない場合の代替指標）
     const revenueGrowth = m.revenueGrowthTTMYoy ?? m['5YearRevenueGrowth'] ?? null;
-    // ROE（自己資本利益率）: TTM優先 → 直近会計年度 → 5年平均の順でフォールバック
-    const roe = m.roeTTM ?? m.roeRfy ?? m.roeAnnual ?? m['roe5Y'] ?? null;
     const isJp = isJpStock(k);
 
     if (eps !== null && bps !== null) {
-      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, roe, jpy: isJp, loading: false };
+      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, jpy: isJp, loading: false };
     } else {
-      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, roe, loading: false, error: 'NO_DATA' };
+      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, loading: false, error: 'NO_DATA' };
     }
   } catch (e) {
     stockFinancials[k] = { loading: false, error: 'FETCH_ERROR' };
@@ -193,7 +164,6 @@ async function fetchBuffettMetrics(k) {
   if (k === currentStock) {
     updateBuffettMetrics(k);
     updatePegRatio(k); // フォワードPER・PEG・フォワードPEG を一括更新
-    updateGrowthRoeMetrics(k); // 成長率・ROE を更新
   }
 }
 
@@ -245,13 +215,6 @@ async function searchAndAddStock() {
     const response = await fetch(buildFinnhubUrl('search', { q: searchQuery }));
     const data     = await response.json();
     resList.innerHTML = '';
-
-    // APIキー無効・レート制限超過などの明示的エラーを先に検出
-    const apiErr = getFinnhubErrorMessage(response, data);
-    if (apiErr) {
-      resList.innerHTML = `<li>⚠️ Finnhub API: ${apiErr}</li>`;
-      return;
-    }
 
     if (data.result && data.result.length > 0) {
       // 日本語検索の場合は .T 銘柄を優先的に上に出す

@@ -4,7 +4,7 @@
 //                Network First（API通信はキャッシュしない）
 // ============================================================
 
-const CACHE_NAME = 'kabu-sim-v6'; // ← バージョンを上げてキャッシュを強制更新（Finnhub APIエラー診断機能を追加）
+const CACHE_NAME = 'kabu-sim-v4'; // ← バージョンを上げてキャッシュを強制更新（スマホ表示さらに拡大）
 
 // キャッシュ対象の静的ファイル
 const STATIC_ASSETS = [

@@ -109,7 +109,6 @@ function switchStock(k) {
   buildTabs();
   updateBuffettMetrics(k);
   updatePegRatio(k);
-  updateGrowthRoeMetrics(k);
   updateCrashTest();
   renderPendingOrders();
   updateEarningsPanel(k);
@@ -167,11 +166,6 @@ function updateUI() {
       syncEl.textContent = lang === 'ja'
         ? '⚠️ 価格データを取得できませんでした。銘柄コードを確認してください。'
         : '⚠️ No price data. Please check the ticker symbol.';
-    } else if (err === 'API_ERROR') {
-      const detail = STOCKS[currentStock]?._fetchErrorMsg || '';
-      syncEl.textContent = lang === 'ja'
-        ? `⚠️ Finnhub APIエラー: ${detail}（APIキーの有効性・利用制限をご確認ください）`
-        : `⚠️ Finnhub API error: ${detail} (check your API key / rate limit)`;
     }
     return;
   }

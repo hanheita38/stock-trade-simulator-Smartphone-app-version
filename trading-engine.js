@@ -424,89 +424,6 @@ function updatePegRatio(k) {
 }
 
 // ============================================================
-// 成長率（EPS成長率）・ROE（自己資本利益率）
-// ============================================================
-
-/**
- * ％表示の指標値を正規化する（負値も許容する版）
- * Finnhub は小数（0.15 = 15%）と整数（15 = 15%）表記が混在するため統一する
- * ROEは赤字企業でマイナスになり得るため、EPS成長率用の _normalizeGrowthPct とは別に用意する
- * @param {number|null} raw - 生の指標値
- * @returns {number|null} %表示に正規化した値
- */
-function _normalizePercentSigned(raw) {
-  if (raw === null || raw === undefined || !isFinite(raw)) return null;
-  return Math.abs(raw) < 3 ? raw * 100 : raw;
-}
-
-/**
- * 成長率（EPS成長率、取得不可時は売上成長率）と ROE をUIに反映する
- * @param {string} k - 銘柄コード
- */
-function updateGrowthRoeMetrics(k) {
-  const growthBox  = document.getElementById('growth-rate-box');
-  const growthVal  = document.getElementById('growth-rate-val');
-  const growthLbl  = document.getElementById('label-growth-rate');
-  const growthDesc = document.getElementById('desc-growth-rate');
-  const roeBox     = document.getElementById('roe-box');
-  const roeVal     = document.getElementById('roe-val');
-  const roeDesc    = document.getElementById('desc-roe');
-  if (!growthBox || !roeBox) return;
-
-  const fin  = stockFinancials[k];
-  const isJa = lang === 'ja';
-
-  if (!fin || fin.loading) {
-    growthVal.textContent = isJa ? '取得中...' : 'Loading...';
-    roeVal.textContent    = isJa ? '取得中...' : 'Loading...';
-    growthBox.className   = 'metric-box';
-    roeBox.className      = 'metric-box';
-    return;
-  }
-
-  // ─── 成長率（EPS成長率優先、取れなければ売上成長率で代替）───
-  const epsGrowthPct = _normalizeGrowthPct(fin.epsGrowth);
-  const revGrowthPct = _normalizeGrowthPct(fin.revenueGrowth);
-  const growthPct    = epsGrowthPct ?? revGrowthPct;
-
-  if (growthPct === null) {
-    growthVal.textContent  = isJa ? 'データなし' : 'N/A';
-    growthBox.className    = 'metric-box';
-    if (growthDesc) growthDesc.textContent = isJa
-      ? 'EPS成長率・売上成長率のいずれも取得できませんでした'
-      : 'Neither EPS growth nor revenue growth data is available';
-  } else {
-    const usingEps = epsGrowthPct !== null;
-    if (growthLbl) growthLbl.textContent = usingEps
-      ? (isJa ? '🌱 成長率（EPS）' : '🌱 Growth Rate (EPS)')
-      : (isJa ? '🌱 成長率（売上・代替）' : '🌱 Growth Rate (Revenue, fallback)');
-    growthVal.textContent = `+${growthPct.toFixed(1)}%`;
-    growthBox.className   = `metric-box ${growthPct >= 15 ? 'buffett-margin-pos' : ''}`;
-    if (growthDesc) growthDesc.textContent = isJa
-      ? `前年比 ${usingEps ? 'EPS' : '売上'}成長率。15%以上は高成長の目安（出典: Finnhub）`
-      : `Year-over-year ${usingEps ? 'EPS' : 'revenue'} growth. 15%+ suggests high growth (source: Finnhub)`;
-  }
-
-  // ─── ROE（自己資本利益率）───
-  const roePct = _normalizePercentSigned(fin.roe);
-
-  if (roePct === null) {
-    roeVal.textContent = isJa ? 'データなし' : 'N/A';
-    roeBox.className   = 'metric-box';
-    if (roeDesc) roeDesc.textContent = isJa
-      ? 'ROEデータが取得できませんでした'
-      : 'ROE data unavailable';
-  } else {
-    const sign = roePct >= 0 ? '+' : '';
-    roeVal.textContent = `${sign}${roePct.toFixed(1)}%`;
-    roeBox.className   = `metric-box ${roePct >= 15 ? 'buffett-margin-pos' : roePct < 0 ? 'buffett-margin-neg' : ''}`;
-    if (roeDesc) roeDesc.textContent = isJa
-      ? `自己資本に対する利益率。15%以上が優良企業の目安、マイナスは赤字（出典: Finnhub）`
-      : `Return on shareholders' equity. 15%+ suggests a strong business; negative means a loss (source: Finnhub)`;
-  }
-}
-
-// ============================================================
 // 暴落テスト（ダリオ流）
 // ============================================================
 
@@ -549,7 +466,6 @@ function updateRiskMetrics() {
   document.getElementById('max-drawdown').textContent  = drawdown === null ? '--' : `${(drawdown * 100).toFixed(2)}%`;
   updateBuffettMetrics(currentStock);
   updatePegRatio(currentStock);
-  updateGrowthRoeMetrics(currentStock);
   updateCrashTest();
 }
 
