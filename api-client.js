@@ -149,12 +149,14 @@ async function fetchBuffettMetrics(k) {
     const epsGrowth = m['5YearEPSGrowth'] ?? m['3YearEPSGrowth'] ?? m.epsTTMToTTMGrowth ?? null;
     // 売上成長率（EPS成長率が取れない場合の代替指標）
     const revenueGrowth = m.revenueGrowthTTMYoy ?? m['5YearRevenueGrowth'] ?? null;
+    // ROE（自己資本利益率）: roeTTM（TTMベース） → なければ roeAnnual
+    const roe = m.roeTTM ?? m.roeAnnual ?? null;
     const isJp = isJpStock(k);
 
     if (eps !== null && bps !== null) {
-      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, jpy: isJp, loading: false };
+      stockFinancials[k] = { eps, bps, pe, forwardPe, epsGrowth, revenueGrowth, roe, jpy: isJp, loading: false };
     } else {
-      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, loading: false, error: 'NO_DATA' };
+      stockFinancials[k] = { pe, forwardPe, epsGrowth, revenueGrowth, roe, loading: false, error: 'NO_DATA' };
     }
   } catch (e) {
     stockFinancials[k] = { loading: false, error: 'FETCH_ERROR' };
@@ -164,6 +166,7 @@ async function fetchBuffettMetrics(k) {
   if (k === currentStock) {
     updateBuffettMetrics(k);
     updatePegRatio(k); // フォワードPER・PEG・フォワードPEG を一括更新
+    updateGrowthRoeMetrics(k); // ROE・資本効率評価
   }
 }
 

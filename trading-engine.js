@@ -424,6 +424,87 @@ function updatePegRatio(k) {
 }
 
 // ============================================================
+// ROE（自己資本利益率）・資本効率評価
+// ============================================================
+
+/**
+ * ROE（%表示）を正規化する
+ * Finnhub は小数（0.15 = 15%）と整数（15 = 15%）が混在するため統一する
+ * @param {number|null} raw - 生のROE値
+ * @returns {number|null} %表示のROE
+ */
+function _normalizeRoePct(raw) {
+  if (raw === null || raw === undefined || !isFinite(raw)) return null;
+  // 絶対値が3未満なら小数表現とみなして100倍
+  return Math.abs(raw) < 3 ? raw * 100 : raw;
+}
+
+/**
+ * ROEから資本効率の評価バッジを返す
+ * 目安: 15%以上=優良（バフェット基準）、8%以上=標準（伊藤レポートの資本コスト基準）、
+ *       8%未満=課題あり、マイナス=毀損
+ * @param {number} roePct
+ * @returns {{ cls: string, text: string }}
+ */
+function _roeBadge(roePct) {
+  const t = I18N[lang];
+  if (roePct < 0)   return { cls: 'poor',      text: t.roeNegative };
+  if (roePct < 8)   return { cls: 'poor',      text: t.roeLow };
+  if (roePct < 15)  return { cls: 'fair',      text: t.roeAverage };
+  return               { cls: 'excellent', text: t.roeExcellent };
+}
+
+/**
+ * ROEと資本効率評価を計算してUIに反映する
+ * データ未取得の場合は fetchBuffettMetrics() を呼び出す（バフェット指標と共通取得）
+ * @param {string} k - 銘柄コード
+ */
+function updateGrowthRoeMetrics(k) {
+  const roeBox  = document.getElementById('roe-box');
+  const roeVal  = document.getElementById('roe-val');
+  const roeDesc = document.getElementById('desc-roe');
+  const roeLbl  = document.getElementById('label-roe');
+  if (!roeBox) return;
+
+  const isJa = lang === 'ja';
+  if (roeLbl) roeLbl.textContent = isJa ? '💰 ROE（自己資本利益率）' : '💰 ROE (Return on Equity)';
+
+  const fin = stockFinancials[k];
+
+  // まだデータ取得していない（初回）→ 非同期取得を開始（バフェット指標と共通のAPI呼び出し）
+  if (!fin) {
+    fetchBuffettMetrics(k);
+    roeVal.textContent = isJa ? '取得中...' : 'Loading...';
+    roeBox.className = 'metric-box';
+    return;
+  }
+
+  if (fin.loading) {
+    roeVal.textContent = isJa ? '取得中...' : 'Loading...';
+    roeBox.className = 'metric-box';
+    return;
+  }
+
+  const roePct = _normalizeRoePct(fin.roe);
+
+  if (roePct === null || !isFinite(roePct)) {
+    roeVal.textContent = I18N[lang].buffettNoData;
+    roeBox.className   = 'metric-box';
+    if (roeDesc) roeDesc.textContent = isJa
+      ? 'ROEデータを取得できませんでした'
+      : 'ROE data unavailable';
+    return;
+  }
+
+  const badge = _roeBadge(roePct);
+  roeVal.innerHTML  = `${roePct.toFixed(1)}%<span class="roe-badge ${badge.cls}">${badge.text}</span>`;
+  roeBox.className  = `metric-box roe-${badge.cls}`;
+  if (roeDesc) roeDesc.textContent = isJa
+    ? `当期純利益 ÷ 自己資本。目安: 15%以上=優良、8%以上=標準（資本コストの目安）、8%未満=資本効率に課題。`
+    : `Net income ÷ shareholder equity. Rule of thumb: 15%+ excellent, 8%+ average (typical cost-of-capital benchmark), below 8% weak capital efficiency.`;
+}
+
+// ============================================================
 // 暴落テスト（ダリオ流）
 // ============================================================
 
@@ -466,6 +547,7 @@ function updateRiskMetrics() {
   document.getElementById('max-drawdown').textContent  = drawdown === null ? '--' : `${(drawdown * 100).toFixed(2)}%`;
   updateBuffettMetrics(currentStock);
   updatePegRatio(currentStock);
+  updateGrowthRoeMetrics(currentStock);
   updateCrashTest();
 }
 
